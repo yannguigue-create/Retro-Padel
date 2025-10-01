@@ -27,9 +27,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-)
-
-
 # ==========================
 # PARAMÈTRES TOURNOI
 # ==========================
@@ -193,6 +190,7 @@ if st.button("📊 Calculer le classement"):
     with col2:
         st.write("🏅 Top 8 Femmes")
         st.dataframe(top_f)
+
 
 
 
