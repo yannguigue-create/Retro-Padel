@@ -11,14 +11,22 @@ st.set_page_config(
     layout="wide"
 )
 
-# ==========================
+# ================================
 # LOGO + TITRE
-# ==========================
-# Mets ton logo sur GitHub (ex: repo/images/logo.png) et mets le bon lien RAW ci-dessous
-st.image("https://raw.githubusercontent.com/yannguigue-creer/Retro-Padel/main/logo.png", width=300)
+# ================================
+st.markdown(
+    f"""
+    <div style="text-align: center;">
+        <img src="https://raw.githubusercontent.com/yannguigue-créer/Retro-Padel/main/logo%20rétro%20padel.png" 
+             width="350">
+        <h1 style="color:#1E3A8A; font-family: Arial, sans-serif;">
+            🎾 Tournoi de Padel - Retro Padel
+        </h1>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Tournoi de Padel - Retro Padel</h1>", unsafe_allow_html=True)
-st.markdown("---")
 
 # ==========================
 # PARAMÈTRES TOURNOI
@@ -183,5 +191,6 @@ if st.button("📊 Calculer le classement"):
     with col2:
         st.write("🏅 Top 8 Femmes")
         st.dataframe(top_f)
+
 
 
