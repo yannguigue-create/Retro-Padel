@@ -44,17 +44,20 @@ with st.sidebar:
 
     if st.button("♻️ Reset Tournoi"):
         st.session_state.matches = []
-        st.session_state.resultats = []
         st.session_state.round = 0
-        st.success("Le tournoi a été réinitialisé !")
+        st.session_state.resultats = []
+        st.session_state.finales = {}
+        st.success("✅ Le tournoi a été réinitialisé !")
 
 # Initialisation des variables globales
 if "matches" not in st.session_state:
     st.session_state.matches = []
-if "resultats" not in st.session_state:
-    st.session_state.resultats = []
 if "round" not in st.session_state:
     st.session_state.round = 0
+if "resultats" not in st.session_state:
+    st.session_state.resultats = []
+if "finales" not in st.session_state:
+    st.session_state.finales = {}
 
 # =========================
 # GÉNÉRATION DES MATCHS
@@ -130,8 +133,44 @@ def calculer_classement():
     ])
 
     df = df.sort_values(by=["Points", "Jeux"], ascending=[False, False]).reset_index(drop=True)
-    df.index += 1  # ajoute une colonne Rang
+    df.index += 1  # Ajoute le rang
     return df
+
+# =========================
+# PHASES FINALES
+# =========================
+def generer_finales(classement):
+    top8_h = classement[classement["Joueur"].isin(hommes)].head(8)["Joueur"].tolist()
+    top8_f = classement[classement["Joueur"].isin(femmes)].head(8)["Joueur"].tolist()
+
+    # Paires hommes/femmes
+    random.shuffle(top8_h)
+    random.shuffle(top8_f)
+    equipes = [f"{h} + {f}" for h, f in zip(top8_h, top8_f)]
+
+    finales = {"1/4": [], "1/2": [], "Finale": []}
+
+    # 1/4 de finale
+    for i in range(0, 8, 2):
+        finales["1/4"].append({"Equipe A": equipes[i], "Equipe B": equipes[i+1], "Score": "", "Vainqueur": ""})
+
+    st.session_state.finales = finales
+
+def jouer_phase(phase):
+    gagnants = []
+    for match in st.session_state.finales[phase]:
+        if match["Score"]:
+            try:
+                sc_a, sc_b = map(int, match["Score"].split("-"))
+            except:
+                continue
+            if sc_a > sc_b:
+                match["Vainqueur"] = match["Equipe A"]
+                gagnants.append(match["Equipe A"])
+            else:
+                match["Vainqueur"] = match["Equipe B"]
+                gagnants.append(match["Equipe B"])
+    return gagnants
 
 # =========================
 # INTERFACE
@@ -140,6 +179,7 @@ st.subheader("🎲 Gestion des matchs")
 if st.button("➕ Générer un nouveau round"):
     generer_round()
 
+# Affichage des matchs
 for match in st.session_state.matches:
     col1, col2, col3 = st.columns([2,2,1])
     with col1:
@@ -150,6 +190,7 @@ for match in st.session_state.matches:
         score = st.text_input(f"Score Round {match['Round']} Terrain {match['Terrain']}", value=match["Score"], key=f"score_{match['Round']}_{match['Terrain']}")
         match["Score"] = score
 
+# Classement général
 if st.button("📊 Calculer le classement"):
     classement = calculer_classement()
     st.subheader("🏆 Classement général")
@@ -160,3 +201,31 @@ if st.button("📊 Calculer le classement"):
 
     st.subheader("👩 Top 8 Femmes")
     st.dataframe(classement[classement["Joueur"].isin(femmes)].head(8))
+
+    if st.button("⚡ Générer phases finales"):
+        generer_finales(classement)
+        st.success("Phases finales générées !")
+
+# Phases finales
+if st.session_state.finales:
+    for phase in ["1/4", "1/2", "Finale"]:
+        if phase in st.session_state.finales and st.session_state.finales[phase]:
+            st.subheader(f"🏅 {phase}")
+            gagnants = []
+            for i, match in enumerate(st.session_state.finales[phase]):
+                col1, col2, col3 = st.columns([2,2,1])
+                with col1:
+                    st.write(f"**{match['Equipe A']}**")
+                with col2:
+                    st.write(f"**{match['Equipe B']}**")
+                with col3:
+                    score = st.text_input(f"Score {phase} Match {i+1}", value=match["Score"], key=f"score_{phase}_{i}")
+                    match["Score"] = score
+            if st.button(f"✅ Valider {phase}"):
+                gagnants = jouer_phase(phase)
+                if phase == "1/4":
+                    st.session_state.finales["1/2"] = [{"Equipe A": gagnants[i], "Equipe B": gagnants[i+1], "Score": "", "Vainqueur": ""} for i in range(0, len(gagnants), 2)]
+                elif phase == "1/2":
+                    st.session_state.finales["Finale"] = [{"Equipe A": gagnants[0], "Equipe B": gagnants[1], "Score": "", "Vainqueur": ""}]
+                elif phase == "Finale":
+                    st.success(f"🏆 Le grand vainqueur est : {gagnants[0]} !")
