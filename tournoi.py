@@ -63,15 +63,10 @@ if st.sidebar.button("🔄 Reset Tournoi Complet", type="primary"):
     st.rerun()
 
 # --- Initialisation / mise à jour des joueurs ---
-actuels = set(st.session_state.joueurs.keys())
-attendus = set(hommes + femmes)
-
-# retirer ceux qui ont disparu
 for j in list(st.session_state.joueurs.keys()):
-    if j not in attendus:
+    if j not in set(hommes+femmes):
         del st.session_state.joueurs[j]
 
-# ajouter les nouveaux
 for h in hommes:
     if h not in st.session_state.joueurs:
         st.session_state.joueurs[h] = {"Points": 0.0, "Jeux": 0, "Matchs": 0, "Sexe": "H"}
@@ -155,18 +150,13 @@ def afficher_classement():
     if not st.session_state.joueurs:
         st.warning("Aucun joueur enregistré")
         return
-    
-    df = pd.DataFrame.from_dict(st.session_state.joueurs, orient="index")
-    df = df.reset_index().rename(columns={"index": "Joueur"})
-    # Affichage 1 seule décimale
-    df["Points_aff"] = df["Points"].map(lambda x: f"{x:.1f}")
-    # Tri sur les valeurs numériques malgré le formatage d'affichage
-    df = df.sort_values(by=["Points", "Jeux"], ascending=False).reset_index(drop=True)
-    df.insert(0, "Rang", df.index + 1)
+    df = pd.DataFrame.from_dict(st.session_state.joueurs, orient="index").reset_index().rename(columns={"index":"Joueur"})
+    df["Points_aff"] = df["Points"].map(lambda x: f"{x:.1f}")  # 1 décimale uniquement
+    df = df.sort_values(by=["Points","Jeux"], ascending=False).reset_index(drop=True)
+    df.insert(0,"Rang", df.index+1)
     df["Jeux"] = df["Jeux"].astype(int)
     df["Matchs"] = df["Matchs"].astype(int)
-    df = df[["Rang", "Joueur", "Sexe", "Points_aff", "Jeux", "Matchs"]]
-    df = df.rename(columns={"Points_aff": "Points"})
+    df = df[["Rang","Joueur","Sexe","Points_aff","Jeux","Matchs"]].rename(columns={"Points_aff":"Points"})
     st.table(df)
 
 # --- Top 8 Hommes / Femmes visibles en permanence ---
@@ -174,22 +164,18 @@ def afficher_top8_permanents():
     if not st.session_state.joueurs:
         return
     df = pd.DataFrame.from_dict(st.session_state.joueurs, orient="index").reset_index().rename(columns={"index":"Joueur"})
-    # tri num
     df = df.sort_values(by=["Points","Jeux"], ascending=False).reset_index(drop=True)
     df["Points"] = df["Points"].map(lambda x: f"{x:.1f}")
     df["Jeux"] = df["Jeux"].astype(int)
     df["Matchs"] = df["Matchs"].astype(int)
-    cols_aff = ["Joueur", "Points", "Jeux", "Matchs"]
-
+    cols = ["Joueur","Points","Jeux","Matchs"]
     colH, colF = st.columns(2)
     with colH:
         st.subheader("👨 Top 8 Hommes (live)")
-        dfH = df[df["Sexe"] == "H"][cols_aff].head(8)
-        st.table(dfH)
+        st.table(df[df["Sexe"]=="H"][cols].head(8))
     with colF:
         st.subheader("👩 Top 8 Femmes (live)")
-        dfF = df[df["Sexe"] == "F"][cols_aff].head(8)
-        st.table(dfF)
+        st.table(df[df["Sexe"]=="F"][cols].head(8))
 
 # --- Quarts = Top8 H + Top8 F -> 8 équipes H+F, tirage ALÉATOIRE pour les 4 quarts ---
 def generer_quarts_top8_hf():
@@ -203,40 +189,36 @@ def generer_quarts_top8_hf():
         key=lambda x: (x[1]["Points"], x[1]["Jeux"]), reverse=True
     )
     if len(hommes_tries) < 8:
-        st.error(f"❌ Au moins 8 hommes requis (actuellement {len(hommes_tries)})")
-    elif len(femmes_tries) < 8:
-        st.error(f"❌ Au moins 8 femmes requises (actuellement {len(femmes_tries)})")
-    else:
-        top8H = [j for j,_ in hommes_tries[:8]]
-        top8F = [j for j,_ in femmes_tries[:8]]
-        # 8 équipes mixtes (H1+F1, ..., H8+F8) puis tirage aléatoire des affiches
-        equipes = [[top8H[i], top8F[i]] for i in range(8)]
-        random.shuffle(equipes)
-        quarts = [(equipes[i], equipes[i+1]) for i in range(0, 8, 2)]
+        st.error(f"❌ Au moins 8 hommes requis (actuellement {len(hommes_tries)})"); return False
+    if len(femmes_tries) < 8:
+        st.error(f"❌ Au moins 8 femmes requises (actuellement {len(femmes_tries)})"); return False
 
-        st.session_state.phases_finales["quarts"] = quarts
-        st.session_state.phases_finales["demis"] = []
-        st.session_state.phases_finales["finale"] = []
-        st.session_state.phases_finales["vainqueur"] = None
-        st.success("✅ Quarts générés (Top8 H & Top8 F, tirage aléatoire) !")
-        return True
-    return False
+    top8H = [j for j,_ in hommes_tries[:8]]
+    top8F = [j for j,_ in femmes_tries[:8]]
+    equipes = [[top8H[i], top8F[i]] for i in range(8)]
+    random.shuffle(equipes)
+    quarts = [(equipes[i], equipes[i+1]) for i in range(0, 8, 2)]
 
-# --- Demi & Finale aléatoires basées sur les gagnants (ne pas effacer les phases précédentes) ---
-def faire_demis_depuis_gagnants(gagnants_quarts):
-    eq = gagnants_quarts[:]
-    random.shuffle(eq)
-    return [(eq[0], eq[1]), (eq[2], eq[3])]
+    st.session_state.phases_finales["quarts"] = quarts
+    st.session_state.phases_finales["demis"] = []
+    st.session_state.phases_finales["finale"] = []
+    st.session_state.phases_finales["vainqueur"] = None
+    st.success("✅ Quarts générés (Top8 H & Top8 F, tirage aléatoire) !")
+    return True
 
-def faire_finale_depuis_gagnants(gagnants_demis):
-    eq = gagnants_demis[:]
-    random.shuffle(eq)
-    return [(eq[0], eq[1])]
+# --- Recomposition aléatoire des équipes gagnantes (H séparés des F) ---
+def recomposer_equipes_mixtes_depuis_gagnants(gagnants):
+    """gagnants : liste d'équipes [ [H,F], ... ] -> renvoie une liste de nouvelles équipes H+F recomposées aléatoirement."""
+    hommes = [eq[0] for eq in gagnants]
+    femmes = [eq[1] for eq in gagnants]
+    random.shuffle(hommes)
+    random.shuffle(femmes)
+    return [[hommes[i], femmes[i]] for i in range(len(gagnants))]
 
 # --- UI ---
 st.title("🎾 Tournoi de Padel - Rétro Padel")
 
-# Bloc génération de round (respect plafond)
+# Génération de round (respect plafond)
 if len(hommes) < 2 or len(femmes) < 2:
     st.warning("⚠️ Il faut au moins 2 hommes et 2 femmes pour générer un round")
 else:
@@ -260,7 +242,7 @@ else:
     else:
         st.info(f"ℹ️ Personne d’éligible (plafond **{max_matchs}** atteint ou pas assez de joueurs H/F).")
 
-# Affichage des rounds & saisie des scores
+# Affichage des rounds & scores
 if st.session_state.matchs:
     st.header("📋 Matchs du tournoi")
     for r, matchs in enumerate(st.session_state.matchs, 1):
@@ -281,7 +263,7 @@ if st.session_state.matchs:
         st.session_state.classement_calcule = True
         st.rerun()
 
-# Affichage du classement + Top8 permanents
+# Classement + Top 8 live
 if st.session_state.classement_calcule or any(st.session_state.joueurs[j]["Matchs"] > 0 for j in st.session_state.joueurs):
     st.header("📊 Classement général")
     maj_classement()
@@ -319,14 +301,18 @@ if st.session_state.phases_finales["quarts"]:
                     gagnants_quarts.append(e1 if s1 > s2 else e2)
                 except:
                     pass
-    # ➜ NE PLUS EFFACER LES QUARTS ; tirage aléatoire pour demis
+
+    # Tirage des 1/2 avec recomposition des équipes à partir des GAGNANTS des quarts
     if len(gagnants_quarts) == 4 and st.button("➡️ Valider & Tirage aléatoire des Demi-finales"):
-        random.shuffle(gagnants_quarts)  # tirage aléatoire des gagnants
+        # 1) recomposer 4 nouvelles équipes H+F (mélange des H et des F gagnants)
+        nouvelles_equipes = recomposer_equipes_mixtes_depuis_gagnants(gagnants_quarts)
+        # 2) tirage aléatoire du tableau
+        random.shuffle(nouvelles_equipes)
         st.session_state.phases_finales["demis"] = [
-            (gagnants_quarts[0], gagnants_quarts[1]),
-            (gagnants_quarts[2], gagnants_quarts[3])
+            (nouvelles_equipes[0], nouvelles_equipes[1]),
+            (nouvelles_equipes[2], nouvelles_equipes[3])
         ]
-        # NE PAS vider les quarts -> restent affichés
+        # on conserve l'affichage des quarts
         st.rerun()
 
 # Demis (toujours visibles)
@@ -345,11 +331,13 @@ if st.session_state.phases_finales["demis"]:
                     gagnants_demis.append(e1 if s1 > s2 else e2)
                 except:
                     pass
-    # ➜ NE PLUS EFFACER LES DEMIS ; tirage aléatoire pour finale
+
+    # Tirage de la FINALE avec recomposition à partir des gagnants des demis
     if len(gagnants_demis) == 2 and st.button("➡️ Valider & Tirage aléatoire de la Finale"):
-        random.shuffle(gagnants_demis)  # tirage aléatoire des gagnants
-        st.session_state.phases_finales["finale"] = [(gagnants_demis[0], gagnants_demis[1])]
-        # NE PAS vider les demis -> restent affichés
+        equipes_finale = recomposer_equipes_mixtes_depuis_gagnants(gagnants_demis)  # 2 équipes recomposées
+        random.shuffle(equipes_finale)  # pour l’ordre
+        st.session_state.phases_finales["finale"] = [(equipes_finale[0], equipes_finale[1])]
+        # on conserve l'affichage des demis
         st.rerun()
 
 # Finale
@@ -367,7 +355,6 @@ if st.session_state.phases_finales["finale"]:
                 vainqueur = e1 if s1 > s2 else e2
                 if st.button("🏅 Valider le vainqueur"):
                     st.session_state.phases_finales["vainqueur"] = vainqueur
-                    # on garde la finale affichée tant que tu ne resets pas
                     st.rerun()
             except:
                 pass
