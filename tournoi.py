@@ -59,7 +59,7 @@ if "matches" not in st.session_state:
 if "rounds" not in st.session_state:
     st.session_state.rounds = []
 if "classement" not in st.session_state:
-    st.session_state.classement = pd.DataFrame(columns=["Joueur", "Points", "Jeux"])
+    st.session_state.classement = pd.DataFrame(columns=["Joueur", "Points", "Jeux", "Matchs"])
 
 # ========================
 # GÉNÉRATION DES MATCHS
@@ -101,15 +101,17 @@ def maj_classement(matches):
 
         for j in equipeA:
             if j not in data:
-                data[j] = {"Points": 0, "Jeux": 0}
+                data[j] = {"Points": 0, "Jeux": 0, "Matchs": 0}
             data[j]["Points"] += ptsA
             data[j]["Jeux"] += sA
+            data[j]["Matchs"] += 1
 
         for j in equipeB:
             if j not in data:
-                data[j] = {"Points": 0, "Jeux": 0}
+                data[j] = {"Points": 0, "Jeux": 0, "Matchs": 0}
             data[j]["Points"] += ptsB
             data[j]["Jeux"] += sB
+            data[j]["Matchs"] += 1
 
     classement = pd.DataFrame.from_dict(data, orient="index").reset_index()
     classement = classement.rename(columns={"index": "Joueur"})
@@ -121,13 +123,16 @@ def maj_classement(matches):
 # ========================
 st.subheader("🎲 Gestion des matchs")
 
-# Bloquer la génération si certains joueurs ont atteint le maximum
-bloque = False
-if not st.session_state.classement.empty:
-    joueurs = st.session_state.classement
-    if any(joueurs["Points"] // 3 >= matchs_max):
-        st.warning("⛔ Certains joueurs ont atteint le nombre maximum de matchs autorisés.")
-        bloque = True
+# Vérifier si un joueur a atteint le maximum
+def joueur_a_atteint_max(matches, max_matchs):
+    compteur = {}
+    for m in matches:
+        if m.get("score"):  # on compte que les matchs joués
+            for j in m["A"] + m["B"]:
+                compteur[j] = compteur.get(j, 0) + 1
+    return any(nb >= max_matchs for nb in compteur.values())
+
+bloque = joueur_a_atteint_max(st.session_state.matches, matchs_max)
 
 if st.button("➕ Générer un nouveau round", disabled=bloque):
     nouveau_round = generer_round(hommes, femmes, terrains)
