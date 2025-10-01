@@ -204,27 +204,25 @@ def generer_quarts_top8_hf():
     )
     if len(hommes_tries) < 8:
         st.error(f"❌ Au moins 8 hommes requis (actuellement {len(hommes_tries)})")
-        return False
-    if len(femmes_tries) < 8:
+    elif len(femmes_tries) < 8:
         st.error(f"❌ Au moins 8 femmes requises (actuellement {len(femmes_tries)})")
-        return False
+    else:
+        top8H = [j for j,_ in hommes_tries[:8]]
+        top8F = [j for j,_ in femmes_tries[:8]]
+        # 8 équipes mixtes (H1+F1, ..., H8+F8) puis tirage aléatoire des affiches
+        equipes = [[top8H[i], top8F[i]] for i in range(8)]
+        random.shuffle(equipes)
+        quarts = [(equipes[i], equipes[i+1]) for i in range(0, 8, 2)]
 
-    top8H = [j for j,_ in hommes_tries[:8]]
-    top8F = [j for j,_ in femmes_tries[:8]]
+        st.session_state.phases_finales["quarts"] = quarts
+        st.session_state.phases_finales["demis"] = []
+        st.session_state.phases_finales["finale"] = []
+        st.session_state.phases_finales["vainqueur"] = None
+        st.success("✅ Quarts générés (Top8 H & Top8 F, tirage aléatoire) !")
+        return True
+    return False
 
-    # 8 équipes mixtes (H1+F1, ..., H8+F8) puis tirage aléatoire des affiches
-    equipes = [[top8H[i], top8F[i]] for i in range(8)]
-    random.shuffle(equipes)
-    quarts = [(equipes[i], equipes[i+1]) for i in range(0, 8, 2)]
-
-    st.session_state.phases_finales["quarts"] = quarts
-    st.session_state.phases_finales["demis"] = []
-    st.session_state.phases_finales["finale"] = []
-    st.session_state.phases_finales["vainqueur"] = None
-    st.success("✅ Quarts générés (Top8 H & Top8 F, tirage aléatoire) !")
-    return True
-
-# --- Demi & Finale aléatoires basées sur les gagnants (inchangé) ---
+# --- Demi & Finale aléatoires basées sur les gagnants (ne pas effacer les phases précédentes) ---
 def faire_demis_depuis_gagnants(gagnants_quarts):
     eq = gagnants_quarts[:]
     random.shuffle(eq)
@@ -305,7 +303,7 @@ with c2:
         st.success("✅ Phases finales réinitialisées")
         st.rerun()
 
-# Quarts
+# Quarts (toujours visibles)
 if st.session_state.phases_finales["quarts"]:
     st.subheader("⚔️ Quarts de finale")
     gagnants_quarts = []
@@ -321,15 +319,17 @@ if st.session_state.phases_finales["quarts"]:
                     gagnants_quarts.append(e1 if s1 > s2 else e2)
                 except:
                     pass
-    if len(gagnants_quarts) == 4 and st.button("➡️ Valider & Tirage des Demi-finales"):
-        # Tirage aléatoire DES GAGNANTS (inchangé)
-        random.shuffle(gagnants_quarts)
-        st.session_state.phases_finales["demis"] = [(gagnants_quarts[0], gagnants_quarts[1]),
-                                                   (gagnants_quarts[2], gagnants_quarts[3])]
-        st.session_state.phases_finales["quarts"] = []
-        st.rerun()
+    # ➜ NE PLUS EFFACER LES QUARTS ; tirage aléatoire pour demis
+    if len(gagnants_quarts) == 4 and st.button("➡️ Valider & Tirage aléatoire des Demi-finales"):
+        random.shuffle(gagnants_quarts)  # tirage aléatoire des gagnants
+        st.session_state.phases_finales["demis"] = [
+            (gagnants_quarts[0], gagnants_quarts[1]),
+            (gagnants_quarts[2], gagnants_quarts[3])
+        ]
+        # NE PAS vider les quarts -> restent affichés
+        st.experimental_rerun()
 
-# Demis
+# Demis (toujours visibles)
 if st.session_state.phases_finales["demis"]:
     st.subheader("⚔️ Demi-finales")
     gagnants_demis = []
@@ -345,12 +345,12 @@ if st.session_state.phases_finales["demis"]:
                     gagnants_demis.append(e1 if s1 > s2 else e2)
                 except:
                     pass
-    if len(gagnants_demis) == 2 and st.button("➡️ Valider & Tirage de la Finale"):
-        # Tirage aléatoire DES GAGNANTS (inchangé)
-        random.shuffle(gagnants_demis)
+    # ➜ NE PLUS EFFACER LES DEMIS ; tirage aléatoire pour finale
+    if len(gagnants_demis) == 2 and st.button("➡️ Valider & Tirage aléatoire de la Finale"):
+        random.shuffle(gagnants_demis)  # tirage aléatoire des gagnants
         st.session_state.phases_finales["finale"] = [(gagnants_demis[0], gagnants_demis[1])]
-        st.session_state.phases_finales["demis"] = []
-        st.rerun()
+        # NE PAS vider les demis -> restent affichés
+        st.experimental_rerun()
 
 # Finale
 if st.session_state.phases_finales["finale"]:
@@ -367,8 +367,8 @@ if st.session_state.phases_finales["finale"]:
                 vainqueur = e1 if s1 > s2 else e2
                 if st.button("🏅 Valider le vainqueur"):
                     st.session_state.phases_finales["vainqueur"] = vainqueur
-                    st.session_state.phases_finales["finale"] = []
-                    st.rerun()
+                    # on garde la finale affichée tant que tu ne resets pas
+                    st.experimental_rerun()
             except:
                 pass
 
@@ -377,6 +377,6 @@ if st.session_state.phases_finales.get("vainqueur"):
     st.balloons()
     st.success(f"🎉🏆 **VAINQUEURS : {v[0]} & {v[1]} !**")
 
-# Top 8 permanents toujours visibles (même si pas encore cliqué "Calculer le classement")
+# Top 8 permanents toujours visibles
 st.markdown("---")
 afficher_top8_permanents()
