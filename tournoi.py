@@ -2,150 +2,138 @@ import streamlit as st
 import pandas as pd
 import random
 
-# ===============================
-# CONFIGURATION DE L'APP
-# ===============================
-st.set_page_config(page_title="Tournoi de Padel - The Retro Padel", layout="wide")
+# ======================
+# CONFIGURATION PAGE
+# ======================
+st.set_page_config(
+    page_title="Tournoi de Padel - Retro Padel",
+    page_icon="🎾",
+    layout="wide"
+)
 
-# Logo et titre
-st.image("logo.png", width=250)
-st.markdown("<h1 style='text-align: center; color: #1A237E;'>🎾 Tournoi de Padel</h1>", unsafe_allow_html=True)
+# ======================
+# LOGO + TITRE
+# ======================
+st.image("https://raw.githubusercontent.com/ton-repo/logo/main/logo.png", width=250)
+st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Tournoi de Padel - The Retro Padel</h1>", unsafe_allow_html=True)
+st.markdown("---")
 
-# ===============================
-# PARAMÈTRES DU TOURNOI
-# ===============================
-st.sidebar.header("⚙️ Paramètres")
+# ======================
+# PARAMÈTRES
+# ======================
+with st.sidebar:
+    st.header("⚙️ Paramètres du tournoi")
+    hommes_input = st.text_area("Liste des hommes (un par ligne)", "Yann\nRomuald\nMatthieu\nKarl")
+    femmes_input = st.text_area("Liste des femmes (un par ligne)", "Sabine\nElyse\nGarance\nMonica")
 
-hommes_input = st.sidebar.text_area("Liste des hommes (un par ligne)", "Yann\nRomuald\nMatthieu\nKarl\nFranck\nJean Pierre\nBruce\nDimitri\nRomain\nCharles")
-femmes_input = st.sidebar.text_area("Liste des femmes (un par ligne)", "Sabine\nElyse\nGarance\nMonica\nCharlotte\nRose\nAline\nCelia\nSophie\nBenoite")
+    hommes = [h.strip() for h in hommes_input.split("\n") if h.strip()]
+    femmes = [f.strip() for f in femmes_input.split("\n") if f.strip()]
 
-hommes = [h.strip() for h in hommes_input.split("\n") if h.strip()]
-femmes = [f.strip() for f in femmes_input.split("\n") if f.strip()]
+    if st.button("🔄 Réinitialiser"):
+        st.session_state.clear()
+        st.experimental_rerun()
 
-if "matches" not in st.session_state:
-    st.session_state.matches = []
-if "resultats" not in st.session_state:
-    st.session_state.resultats = []
+# ======================
+# INITIALISATION
+# ======================
+if "matchs" not in st.session_state:
+    st.session_state.matchs = []
+if "scores" not in st.session_state:
+    st.session_state.scores = {}
 if "classement" not in st.session_state:
-    st.session_state.classement = pd.DataFrame()
+    st.session_state.classement = pd.DataFrame(columns=["Joueur", "Sexe", "Points", "Jeux"])
 
-# ===============================
-# FONCTIONS
-# ===============================
-def generer_matches():
-    matches = []
+# ======================
+# GÉNÉRATION MATCHS
+# ======================
+if st.button("🎲 Générer les matchs"):
     random.shuffle(hommes)
     random.shuffle(femmes)
-    nb_equipes = min(len(hommes), len(femmes))
+    st.session_state.matchs = []
+    for i in range(min(len(hommes), len(femmes)) // 2):
+        h1, h2 = hommes[2*i], hommes[2*i+1]
+        f1, f2 = femmes[2*i], femmes[2*i+1]
+        st.session_state.matchs.append(((h1, f1), (h2, f2)))
 
-    for i in range(0, nb_equipes, 2):
-        if i+1 < nb_equipes:
-            equipeA = f"{hommes[i]} + {femmes[i]}"
-            equipeB = f"{hommes[i+1]} + {femmes[i+1]}"
-            matches.append([equipeA, equipeB, ""])
-    return matches
-
-def calculer_classement():
-    joueurs = {}
-    for match in st.session_state.resultats:
-        equipeA, equipeB, score = match
-        if score:
-            try:
-                sA, sB = map(int, score.split("-"))
-            except:
-                continue
-
-            if sA > sB:
-                pointsA, pointsB = 3, 0.5
-            elif sB > sA:
-                pointsA, pointsB = 0.5, 3
-            else:
-                pointsA, pointsB = 1, 1
-
-            for joueur in equipeA.split(" + "):
-                if joueur not in joueurs:
-                    joueurs[joueur] = {"Points": 0, "Jeux": 0}
-                joueurs[joueur]["Points"] += pointsA
-                joueurs[joueur]["Jeux"] += sA
-
-            for joueur in equipeB.split(" + "):
-                if joueur not in joueurs:
-                    joueurs[joueur] = {"Points": 0, "Jeux": 0}
-                joueurs[joueur]["Points"] += pointsB
-                joueurs[joueur]["Jeux"] += sB
-
-    classement = pd.DataFrame(joueurs).T.reset_index()
-    classement = classement.rename(columns={"index": "Joueur"})
-    classement = classement.sort_values(by=["Points", "Jeux"], ascending=[False, False]).reset_index(drop=True)
-    return classement
-
-def generer_phase_finale(classement, phase="Quart de finale"):
-    st.markdown(f"## 🏆 {phase}")
-    qualifies = list(classement.head(8)["Joueur"])
-    random.shuffle(qualifies)
-    matches = []
-    for i in range(0, len(qualifies), 2):
-        if i+1 < len(qualifies):
-            equipeA = qualifies[i]
-            equipeB = qualifies[i+1]
-            matches.append([equipeA, equipeB, ""])
-    return matches
-
-# ===============================
-# GÉNÉRER LES MATCHS
-# ===============================
-if st.button("🎲 Générer les matchs"):
-    st.session_state.matches = generer_matches()
-    st.session_state.resultats = [[m[0], m[1], ""] for m in st.session_state.matches]
-
-# ===============================
+# ======================
 # AFFICHAGE MATCHS + SCORES
-# ===============================
-if st.session_state.matches:
-    st.markdown("## 📋 Matchs en cours")
-    for i, match in enumerate(st.session_state.resultats):
-        col1, col2, col3 = st.columns([3, 2, 2])
-        with col1:
-            st.write(f"Équipe A : **{match[0]}**")
-        with col2:
-            score = st.text_input(f"Score du match {i+1} (ex : 6-4)", value=match[2], key=f"score_{i}")
-        with col3:
-            st.write(f"Équipe B : **{match[1]}**")
-        st.session_state.resultats[i][2] = score
+# ======================
+if st.session_state.matchs:
+    st.subheader("📋 Matchs en cours")
+    cols = st.columns(2)
+    for idx, (eqA, eqB) in enumerate(st.session_state.matchs, 1):
+        with cols[idx % 2]:
+            score = st.text_input(f"Score du match {idx} ({eqA[0]} + {eqA[1]} vs {eqB[0]} + {eqB[1]})", key=f"score_{idx}")
+            st.session_state.scores[idx] = {"A": eqA, "B": eqB, "score": score}
 
-# ===============================
-# CLASSEMENT
-# ===============================
-if st.button("✅ Calculer le classement"):
-    st.session_state.classement = calculer_classement()
+# ======================
+# CALCUL CLASSEMENT
+# ======================
+if st.button("📊 Calculer le classement"):
+    data = []
+    for match in st.session_state.scores.values():
+        if match["score"]:
+            try:
+                scA, scB = map(int, match["score"].split("-"))
+                if scA > scB:
+                    gagnants, perdants = match["A"], match["B"]
+                    ptsA, ptsB = 3, 0.5
+                else:
+                    gagnants, perdants = match["B"], match["A"]
+                    ptsA, ptsB = 0.5, 3
 
+                for j in match["A"]:
+                    data.append([j, "H" if j in hommes else "F", ptsA, scA])
+                for j in match["B"]:
+                    data.append([j, "H" if j in hommes else "F", ptsB, scB])
+            except:
+                st.error(f"⚠️ Score invalide : {match['score']}")
+
+    df = pd.DataFrame(data, columns=["Joueur", "Sexe", "Points", "Jeux"])
+    classement = df.groupby(["Joueur", "Sexe"], as_index=False).sum()
+    classement = classement.sort_values(by=["Points", "Jeux"], ascending=False)
+
+    st.session_state.classement = classement
+
+    st.success("✅ Classement mis à jour !")
+
+# ======================
+# AFFICHAGE CLASSEMENT
+# ======================
 if not st.session_state.classement.empty:
-    st.markdown("## 📊 Classement général")
+    st.subheader("🏆 Classement général")
     st.dataframe(st.session_state.classement)
 
-    # ===============================
-    # PHASES FINALES
-    # ===============================
-    if st.button("🏅 Lancer les 1/4 de finale"):
-        st.session_state.quarts = generer_phase_finale(st.session_state.classement, "1/4 de finale")
-        st.session_state.demis = []
-        st.session_state.finale = []
+    # TOP 8 hommes et femmes
+    top_h = st.session_state.classement[st.session_state.classement["Sexe"]=="H"].head(8)
+    top_f = st.session_state.classement[st.session_state.classement["Sexe"]=="F"].head(8)
 
-    if "quarts" in st.session_state and st.session_state.quarts:
-        for i, match in enumerate(st.session_state.quarts):
-            st.write(f"**Match {i+1}** : {match[0]} vs {match[1]}")
+    st.subheader("👨‍🦱 Top 8 Hommes")
+    st.table(top_h)
 
-    if st.button("🔥 Lancer les 1/2 finales"):
-        st.session_state.demis = generer_phase_finale(st.session_state.classement, "1/2 finale")
+    st.subheader("👩 Top 8 Femmes")
+    st.table(top_f)
 
-    if "demis" in st.session_state and st.session_state.demis:
-        for i, match in enumerate(st.session_state.demis):
-            st.write(f"**Demi {i+1}** : {match[0]} vs {match[1]}")
+# ======================
+# PHASES FINALES
+# ======================
+if st.button("⚡ Générer les phases finales"):
+    if st.session_state.classement.empty:
+        st.error("⚠️ Calcule d'abord le classement avant de générer les phases finales !")
+    else:
+        st.subheader("🎯 Phases Finales (1/4 - 1/2 - Finale)")
 
-    if st.button("👑 Lancer la finale"):
-        st.session_state.finale = generer_phase_finale(st.session_state.classement, "Finale")
+        qualifiés = list(st.session_state.classement.head(8)["Joueur"])
+        random.shuffle(qualifiés)
 
-    if "finale" in st.session_state and st.session_state.finale:
-        st.markdown(f"### 🎉 Finale : {st.session_state.finale[0][0]} VS {st.session_state.finale[0][1]}")
+        quarts = [(qualifiés[i], qualifiés[i+1]) for i in range(0, 8, 2)]
+        st.write("### 🟢 Quarts de finale")
+        for q in quarts: st.write(f"{q[0]} vs {q[1]}")
 
-  
+        demis = [(quarts[0][0], quarts[1][0]), (quarts[2][0], quarts[3][0])]
+        st.write("### 🟠 Demi-finales")
+        for d in demis: st.write(f"{d[0]} vs {d[1]}")
+
+        finale = (demis[0][0], demis[1][0])
+        st.write("### 🔴 Finale")
+        st.write(f"{finale[0]} vs {finale[1]}")
