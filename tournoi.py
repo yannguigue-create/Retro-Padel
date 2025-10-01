@@ -147,3 +147,5 @@ if not st.session_state.classement.empty:
 
     if "finale" in st.session_state and st.session_state.finale:
         st.markdown(f"### 🎉 Finale : {st.session_state.finale[0][0]} VS {st.session_state.finale[0][1]}")
+
+  
