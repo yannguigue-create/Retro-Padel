@@ -26,16 +26,27 @@ st.markdown("---")
 with st.sidebar:
     st.header("⚙️ Paramètres du tournoi")
 
-    hommes_input = st.text_area("Liste des hommes (un par ligne)", ...)
-    femmes_input = st.text_area("Liste des femmes (un par ligne)", ...)
+    hommes_input = st.text_area("Liste des hommes (un par ligne)", "Yann\nRomuald\nMatthieu\nKarl")
+    femmes_input = st.text_area("Liste des femmes (un par ligne)", "Sabine\nElyse\nGarance\nMonica")
 
+    # Transformation en liste
     hommes = [h.strip() for h in hommes_input.split("\n") if h.strip()]
     femmes = [f.strip() for f in femmes_input.split("\n") if f.strip()]
+
+    # Compteurs
+    nb_h = len(hommes)
+    nb_f = len(femmes)
+    nb_total = nb_h + nb_f
+
+    st.markdown(f"👨 Hommes : **{nb_h}**")
+    st.markdown(f"👩 Femmes : **{nb_f}**")
+    st.markdown(f"🔢 Total joueurs : **{nb_total}**")
 
     nb_terrains = st.number_input("Nombre de terrains disponibles", min_value=1, max_value=10, value=4)
     nb_min_matchs = st.number_input("Nombre minimum de matchs par joueur", min_value=1, max_value=10, value=4)
 
     reset = st.button("♻️ Reset Tournoi")
+
 
 
     hommes = [h.strip() for h in hommes_input.split("\n") if h.strip()]
@@ -172,4 +183,5 @@ if st.button("📊 Calculer le classement"):
     with col2:
         st.write("🏅 Top 8 Femmes")
         st.dataframe(top_f)
+
 
