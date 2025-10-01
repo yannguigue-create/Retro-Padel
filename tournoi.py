@@ -3,7 +3,7 @@ import pandas as pd
 import random
 
 # ==========================
-# CONFIGURATION PAGE
+# CONFIG PAGE
 # ==========================
 st.set_page_config(
     page_title="Tournoi de Padel - Retro Padel",
@@ -19,7 +19,7 @@ st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Tournoi de Pad
 st.markdown("---")
 
 # ==========================
-# PARAMÈTRES DU TOURNOI
+# PARAMÈTRES TOURNOI
 # ==========================
 with st.sidebar:
     st.header("⚙️ Paramètres du tournoi")
@@ -27,6 +27,7 @@ with st.sidebar:
     femmes_input = st.text_area("Liste des femmes (un par ligne)", "Sabine\nElyse\nGarance\nMonica\nCharlotte\nCelia\nRose\nSophie\nCaroline")
 
     nb_terrains = st.number_input("Nombre de terrains disponibles", min_value=1, max_value=10, value=4)
+    nb_min_matchs = st.number_input("Nombre minimum de matchs par joueur", min_value=1, max_value=10, value=4)
 
     hommes = [h.strip() for h in hommes_input.split("\n") if h.strip()]
     femmes = [f.strip() for f in femmes_input.split("\n") if f.strip()]
@@ -38,14 +39,29 @@ if "rounds" not in st.session_state:
     st.session_state.rounds = []
 if "classement" not in st.session_state:
     st.session_state.classement = pd.DataFrame(columns=["Joueur", "Sexe", "Points", "Jeux"])
+if "match_count" not in st.session_state:
+    st.session_state.match_count = {j: 0 for j in hommes + femmes}
 
 # ==========================
 # GÉNÉRATION D'UN ROUND
 # ==========================
 def generer_round(round_num, nb_terrains):
-    random.shuffle(hommes)
-    random.shuffle(femmes)
-    equipes = list(zip(hommes, femmes))
+    joueurs_dispo = [(h, "H") for h in hommes] + [(f, "F") for f in femmes]
+    random.shuffle(joueurs_dispo)
+
+    # prioriser ceux qui n’ont pas atteint le minimum
+    joueurs_dispo.sort(key=lambda x: st.session_state.match_count[x[0]])
+
+    equipes = []
+    while len(joueurs_dispo) >= 2:
+        h = next((j for j in joueurs_dispo if j[1] == "H"), None)
+        f = next((j for j in joueurs_dispo if j[1] == "F"), None)
+        if not h or not f:
+            break
+        equipes.append((h[0], f[0]))
+        joueurs_dispo.remove(h)
+        joueurs_dispo.remove(f)
+
     random.shuffle(equipes)
 
     matchs = []
@@ -54,6 +70,9 @@ def generer_round(round_num, nb_terrains):
             teamA = equipes[i][0] + " + " + equipes[i][1]
             teamB = equipes[i+1][0] + " + " + equipes[i+1][1]
             matchs.append((teamA, teamB))
+            # incrément compteur
+            for j in [equipes[i][0], equipes[i][1], equipes[i+1][0], equipes[i+1][1]]:
+                st.session_state.match_count[j] += 1
 
     planning = []
     for i, (teamA, teamB) in enumerate(matchs, start=1):
@@ -130,33 +149,21 @@ for r in st.session_state.rounds:
                     match["Score"] = score
 
 # ==========================
-# CLASSEMENT
+# CLASSEMENT + TOP 8
 # ==========================
 if st.button("📊 Calculer le classement"):
     maj_classement()
     st.write("### Classement général")
     st.dataframe(st.session_state.classement)
 
-# ==========================
-# PHASES FINALES
-# ==========================
-def generer_phases_finales():
-    if st.session_state.classement.empty:
-        st.warning("⚠️ Calcule d'abord le classement avant de lancer les phases finales.")
-        return
-    qualifiés = list(st.session_state.classement.head(8)["Joueur"])
+    # Top 8 hommes
+    top_h = st.session_state.classement[st.session_state.classement["Sexe"]=="H"].head(8)
+    top_f = st.session_state.classement[st.session_state.classement["Sexe"]=="F"].head(8)
 
-    st.write("## 🏆 Phases finales")
-    st.write("### 1/4 de finale")
-    quarts = [(qualifiés[i], qualifiés[-i-1]) for i in range(4)]
-    for q in quarts:
-        st.write(f"{q[0]} + {q[1]}")
-
-    st.write("### 1/2 finales")
-    st.write("🔜 Automatisation à compléter selon les vainqueurs des 1/4")
-
-    st.write("### Finale")
-    st.write("🔜 Automatisation à compléter selon les vainqueurs des 1/2")
-
-if st.button("🏆 Lancer les phases finales"):
-    generer_phases_finales()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("🏅 Top 8 Hommes")
+        st.dataframe(top_h)
+    with col2:
+        st.write("🏅 Top 8 Femmes")
+        st.dataframe(top_f)
