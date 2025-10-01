@@ -12,9 +12,11 @@ st.set_page_config(
 )
 
 # ==========================
-# TITRE + LOGO
+# LOGO + TITRE
 # ==========================
-st.image("https://raw.githubusercontent.com/ton-repo/logo/main/logo.png", width=250)
+# Mets ton logo sur GitHub (ex: repo/images/logo.png) et mets le bon lien RAW ci-dessous
+st.image("https://raw.githubusercontent.com/yannguigue-creer/Retro-Padel/main/logo.png", width=300)
+
 st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🎾 Tournoi de Padel - Retro Padel</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
@@ -29,17 +31,19 @@ with st.sidebar:
     nb_terrains = st.number_input("Nombre de terrains disponibles", min_value=1, max_value=10, value=4)
     nb_min_matchs = st.number_input("Nombre minimum de matchs par joueur", min_value=1, max_value=10, value=4)
 
+    reset = st.button("♻️ Reset Tournoi")
+
     hommes = [h.strip() for h in hommes_input.split("\n") if h.strip()]
     femmes = [f.strip() for f in femmes_input.split("\n") if f.strip()]
 
 # ==========================
 # SESSION STATE
 # ==========================
-if "rounds" not in st.session_state:
+if "rounds" not in st.session_state or reset:
     st.session_state.rounds = []
-if "classement" not in st.session_state:
+if "classement" not in st.session_state or reset:
     st.session_state.classement = pd.DataFrame(columns=["Joueur", "Sexe", "Points", "Jeux"])
-if "match_count" not in st.session_state:
+if "match_count" not in st.session_state or reset:
     st.session_state.match_count = {j: 0 for j in hommes + femmes}
 
 # ==========================
@@ -48,8 +52,6 @@ if "match_count" not in st.session_state:
 def generer_round(round_num, nb_terrains):
     joueurs_dispo = [(h, "H") for h in hommes] + [(f, "F") for f in femmes]
     random.shuffle(joueurs_dispo)
-
-    # prioriser ceux qui n’ont pas atteint le minimum
     joueurs_dispo.sort(key=lambda x: st.session_state.match_count[x[0]])
 
     equipes = []
@@ -70,7 +72,6 @@ def generer_round(round_num, nb_terrains):
             teamA = equipes[i][0] + " + " + equipes[i][1]
             teamB = equipes[i+1][0] + " + " + equipes[i+1][1]
             matchs.append((teamA, teamB))
-            # incrément compteur
             for j in [equipes[i][0], equipes[i][1], equipes[i+1][0], equipes[i+1][1]]:
                 st.session_state.match_count[j] += 1
 
@@ -90,7 +91,7 @@ def generer_round(round_num, nb_terrains):
     return planning
 
 # ==========================
-# MISE À JOUR CLASSEMENT
+# CLASSEMENT
 # ==========================
 def maj_classement():
     data = []
@@ -156,7 +157,6 @@ if st.button("📊 Calculer le classement"):
     st.write("### Classement général")
     st.dataframe(st.session_state.classement)
 
-    # Top 8 hommes
     top_h = st.session_state.classement[st.session_state.classement["Sexe"]=="H"].head(8)
     top_f = st.session_state.classement[st.session_state.classement["Sexe"]=="F"].head(8)
 
