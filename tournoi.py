@@ -1,73 +1,58 @@
 import streamlit as st
-import random
 import pandas as pd
+import random
 
 # ----------------------------
-# VARIABLES GLOBALES
+# INITIALISATION
 # ----------------------------
 if "joueurs" not in st.session_state:
     st.session_state.joueurs = {}
-if "matchs" not in st.session_state:
-    st.session_state.matchs = []
-if "scores" not in st.session_state:
-    st.session_state.scores = []
-if "round" not in st.session_state:
-    st.session_state.round = 0
-if "finales" not in st.session_state:
-    st.session_state.finales = {"quarts": [], "demis": [], "finale": []}
+if "rounds" not in st.session_state:
+    st.session_state.rounds = []
+if "matchs_joues" not in st.session_state:
+    st.session_state.matchs_joues = {}
 
 # ----------------------------
-# AJOUT STATS
+# RESET TOURNOI
 # ----------------------------
-def ajouter_stats(joueur, jeux_gagnes, jeux_perdus):
-    if joueur not in st.session_state.joueurs:
-        st.session_state.joueurs[joueur] = {"Points": 0, "Jeux": 0, "Matchs": 0}
-
-    st.session_state.joueurs[joueur]["Jeux"] += jeux_gagnes
-    st.session_state.joueurs[joueur]["Matchs"] += 1
-
-    # Victoire ou défaite
-    if jeux_gagnes > jeux_perdus:
-        st.session_state.joueurs[joueur]["Points"] += 3
-    else:
-        st.session_state.joueurs[joueur]["Points"] += 1
-
-    # Bonus : 0.1 pt par jeu gagné
-    st.session_state.joueurs[joueur]["Points"] += jeux_gagnes * 0.1
-
+def reset_tournoi():
+    st.session_state.joueurs = {}
+    st.session_state.rounds = []
+    st.session_state.matchs_joues = {}
 
 # ----------------------------
-# MISE À JOUR CLASSEMENT
+# MAJ CLASSEMENT
 # ----------------------------
 def maj_classement(matchs, scores):
-    for (team1, team2), score in zip(matchs, scores):
-        if not score or "-" not in score:
+    for i, ((team1, team2), score) in enumerate(zip(matchs, scores)):
+        if not score:
             continue
         try:
             s1, s2 = map(int, score.split("-"))
         except:
             continue
 
-        for joueur in team1:
-            ajouter_stats(joueur, s1, s2)
-        for joueur in team2:
-            ajouter_stats(joueur, s2, s1)
+        if s1 > s2:
+            gagnants, perdants, jeux_g, jeux_p = team1, team2, s1, s2
+        else:
+            gagnants, perdants, jeux_g, jeux_p = team2, team1, s2, s1
 
+        # Mise à jour des stats
+        for j in gagnants:
+            st.session_state.joueurs[j]["Points"] += 3
+            st.session_state.joueurs[j]["Jeux"] += jeux_g
+            st.session_state.joueurs[j]["Matchs"] += 1
+        for j in perdants:
+            st.session_state.joueurs[j]["Points"] += 1
+            st.session_state.joueurs[j]["Jeux"] += jeux_p
+            st.session_state.joueurs[j]["Matchs"] += 1
 
-# ----------------------------
-# AFFICHAGE CLASSEMENT
-# ----------------------------
-def afficher_classement():
-    if not st.session_state.joueurs:
-        return
-    df = pd.DataFrame(st.session_state.joueurs).T
-    df.index.name = "Joueur"
-    df = df.reset_index()
-    df = df.sort_values(by=["Points", "Jeux"], ascending=[False, False])
-    df.insert(0, "Rang", range(1, len(df) + 1))
-    st.subheader("🏅 Classement Général")
-    st.table(df)
-
+        # Bonus 0.1 point par jeu marqué
+        for j in team1 + team2:
+            if j in gagnants:
+                st.session_state.joueurs[j]["Points"] += jeux_g * 0.1
+            else:
+                st.session_state.joueurs[j]["Points"] += jeux_p * 0.1
 
 # ----------------------------
 # GÉNÉRATION DES ROUNDS
@@ -84,113 +69,76 @@ def generer_round(hommes, femmes, terrains, max_matchs):
         team2 = [dispo.pop(), dispo.pop()]
         matchs.append((team1, team2))
 
-    return matchs
-
-
-# ----------------------------
-# PHASES FINALES
-# ----------------------------
-def generer_quarts():
-    classement = sorted(st.session_state.joueurs.items(), key=lambda x: (x[1]["Points"], x[1]["Jeux"]), reverse=True)
-    joueurs_tries = [j[0] for j in classement]
-
-    quarts = [
-        (joueurs_tries[0:2], joueurs_tries[6:8]),
-        (joueurs_tries[2:4], joueurs_tries[4:6])
-    ]
-    st.session_state.finales["quarts"] = quarts
-    return quarts
-
-
-def generer_demis():
-    winners = []
-    for (team1, team2), score in zip(st.session_state.finales["quarts"], st.session_state.scores[-2:]):
-        if not score or "-" not in score:
-            continue
-        s1, s2 = map(int, score.split("-"))
-        winners.append(team1 if s1 > s2 else team2)
-
-    if len(winners) == 2:
-        st.session_state.finales["demis"] = [(winners[0], winners[1])]
-    return st.session_state.finales["demis"]
-
-
-def generer_finale():
-    winners = []
-    for (team1, team2), score in zip(st.session_state.finales["demis"], st.session_state.scores[-1:]):
-        if not score or "-" not in score:
-            continue
-        s1, s2 = map(int, score.split("-"))
-        winners.append(team1 if s1 > s2 else team2)
-
-    if len(winners) == 1:
-        st.session_state.finales["finale"] = [winners[0]]
-    return st.session_state.finales["finale"]
-
+    # 🔹 Formatage clair pour affichage
+    matchs_formates = [(f"{a} + {b}", f"{c} + {d}") for (a, b), (c, d) in matchs]
+    return matchs_formates
 
 # ----------------------------
-# UI STREAMLIT
+# AFFICHAGE CLASSEMENT
 # ----------------------------
+def afficher_classement():
+    if not st.session_state.joueurs:
+        return
+    df = pd.DataFrame(st.session_state.joueurs).T
+    df.index.name = "Joueur"
+    df = df.reset_index()
+    df["Points"] = df["Points"].apply(lambda x: round(x, 1))
+    df["Jeux"] = df["Jeux"].apply(lambda x: round(x, 1))
+    df = df.sort_values(by=["Points", "Jeux"], ascending=[False, False])
+    df.insert(0, "Rang", range(1, len(df) + 1))
+    st.subheader("🏅 Classement Général")
+    st.table(df)
+
+# ----------------------------
+# INTERFACE
+# ----------------------------
+st.image("https://github.com/yannguigue-create/Retro-Padel/blob/bd45ea0f881e79db3d14fce6ef93f7190f1a987a/logo_retro_padel.png?raw=true", width=300)
 st.title("🎾 Tournoi de Padel - Rétro Padel")
 
 st.sidebar.header("⚙️ Paramètres du tournoi")
-hommes = st.sidebar.text_area("Liste des hommes (un par ligne)", "Yann\nRomuald\nMatthieu\nKarl").split("\n")
-femmes = st.sidebar.text_area("Liste des femmes (un par ligne)", "Sabine\nElyse\nGarance\nMonica").split("\n")
+hommes_input = st.sidebar.text_area("Liste des hommes (un par ligne)", "Yann\nRomuald\nMatthieu\nKarl")
+femmes_input = st.sidebar.text_area("Liste des femmes (un par ligne)", "Sabine\nElyse\nGarance\nMonica")
+
+hommes = [h.strip() for h in hommes_input.split("\n") if h.strip()]
+femmes = [f.strip() for f in femmes_input.split("\n") if f.strip()]
+
+st.sidebar.markdown(f"👨 Hommes : {len(hommes)}")
+st.sidebar.markdown(f"👩 Femmes : {len(femmes)}")
+st.sidebar.markdown(f"🎾 Total joueurs : {len(hommes) + len(femmes)}")
 
 terrains = st.sidebar.number_input("Nombre de terrains disponibles", 1, 10, 2)
-max_matchs = st.sidebar.number_input("Nombre maximum de matchs par joueur", 1, 20, 2)
+max_matchs = st.sidebar.number_input("Nombre maximum de matchs par joueur", 1, 10, 2)
 
 if st.sidebar.button("🔄 Reset Tournoi"):
-    st.session_state.joueurs = {}
-    st.session_state.matchs = []
-    st.session_state.scores = []
-    st.session_state.round = 0
-    st.session_state.finales = {"quarts": [], "demis": [], "finale": []}
+    reset_tournoi()
     st.success("Tournoi réinitialisé !")
 
-# ----------------------------
-# ROUNDS
-# ----------------------------
-if st.button("🏆 Générer un nouveau round"):
-    st.session_state.round += 1
-    matchs = generer_round(hommes, femmes, terrains, max_matchs)
-    st.session_state.matchs.extend(matchs)
-    st.session_state.scores.extend([""] * len(matchs))
-    st.success(f"Round {st.session_state.round} généré !")
+# Initialisation joueurs
+for j in hommes + femmes:
+    if j not in st.session_state.joueurs:
+        st.session_state.joueurs[j] = {"Points": 0, "Jeux": 0, "Matchs": 0}
 
-for idx, (team1, team2) in enumerate(st.session_state.matchs, 1):
-    score = st.text_input(f"{team1} vs {team2} (Score Round {st.session_state.round} Terrain {idx})", key=f"score_{idx}")
-    if score:
-        st.session_state.scores[idx - 1] = score
+# ----------------------------
+# GESTION DES ROUNDS
+# ----------------------------
+st.header("🏆 Rounds")
+
+if st.button("🎲 Générer un nouveau round"):
+    round_num = len(st.session_state.rounds) + 1
+    matchs = generer_round(hommes, femmes, terrains, max_matchs)
+    st.session_state.rounds.append((round_num, matchs))
+    st.success(f"Round {round_num} généré !")
+
+for round_num, matchs in st.session_state.rounds:
+    st.subheader(f"🏆 Round {round_num}")
+    scores = []
+    for i, (t1, t2) in enumerate(matchs):
+        score = st.text_input(f"{t1} vs {t2} (Score Round {round_num} Terrain {i+1})")
+        scores.append(score)
+    if st.button(f"📊 Calculer le classement Round {round_num}", key=f"cl_{round_num}"):
+        maj_classement(matchs, scores)
 
 # ----------------------------
 # CLASSEMENT
 # ----------------------------
-if st.button("📊 Calculer le classement"):
-    st.session_state.joueurs = {}
-    maj_classement(st.session_state.matchs, st.session_state.scores)
-    afficher_classement()
-
-# ----------------------------
-# PHASES FINALES
-# ----------------------------
-st.subheader("🏆 Phases Finales")
-
-if st.button("⚡ Générer Quarts de finale"):
-    quarts = generer_quarts()
-    for i, (team1, team2) in enumerate(quarts, 1):
-        st.text_input(f"{team1} vs {team2} (Score Quarts Match {i})", key=f"quart_{i}")
-
-if st.button("🔥 Jouer les 1/2 finales"):
-    demis = generer_demis()
-    for i, (team1, team2) in enumerate(demis, 1):
-        st.text_input(f"{team1} vs {team2} (Score 1/2 finale {i})", key=f"demi_{i}")
-
-if st.button("🏅 Jouer la Finale"):
-    finale = generer_finale()
-    if finale:
-        st.success(f"🏆 Le grand vainqueur est : {finale[0]} 🎉")
-
-if st.button("♻️ Reset Phases Finales"):
-    st.session_state.finales = {"quarts": [], "demis": [], "finale": []}
-    st.success("Phases finales réinitialisées !")
+afficher_classement()
