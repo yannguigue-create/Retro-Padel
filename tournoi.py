@@ -48,11 +48,10 @@ def maj_classement(matchs, scores):
             st.session_state.joueurs[j]["Matchs"] += 1
 
         # Bonus 0.1 point par jeu marqué
-        for j in team1 + team2:
-            if j in gagnants:
-                st.session_state.joueurs[j]["Points"] += jeux_g * 0.1
-            else:
-                st.session_state.joueurs[j]["Points"] += jeux_p * 0.1
+        for j, score_part in zip(team1, [s1, s1]):
+            st.session_state.joueurs[j]["Points"] += s1 * 0.1
+        for j, score_part in zip(team2, [s2, s2]):
+            st.session_state.joueurs[j]["Points"] += s2 * 0.1
 
 # ----------------------------
 # GÉNÉRATION DES ROUNDS
@@ -69,9 +68,7 @@ def generer_round(hommes, femmes, terrains, max_matchs):
         team2 = [dispo.pop(), dispo.pop()]
         matchs.append((team1, team2))
 
-    # 🔹 Formatage clair pour affichage
-    matchs_formates = [(f"{a} + {b}", f"{c} + {d}") for (a, b), (c, d) in matchs]
-    return matchs_formates
+    return matchs
 
 # ----------------------------
 # AFFICHAGE CLASSEMENT
@@ -133,7 +130,9 @@ for round_num, matchs in st.session_state.rounds:
     st.subheader(f"🏆 Round {round_num}")
     scores = []
     for i, (t1, t2) in enumerate(matchs):
-        score = st.text_input(f"{t1} vs {t2} (Score Round {round_num} Terrain {i+1})")
+        t1_str = " + ".join(t1)
+        t2_str = " + ".join(t2)
+        score = st.text_input(f"{t1_str} vs {t2_str} (Score Round {round_num} Terrain {i+1})")
         scores.append(score)
     if st.button(f"📊 Calculer le classement Round {round_num}", key=f"cl_{round_num}"):
         maj_classement(matchs, scores)
