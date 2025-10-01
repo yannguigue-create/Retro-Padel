@@ -17,7 +17,7 @@ st.set_page_config(
 st.markdown(
     """
     <div style="text-align: center;">
-        <img src="https://raw.githubusercontent.com/yannguigue-créer/Retro-Padel/main/logo_retro_padel.png" 
+        <img src="https://raw.githubusercontent.com/yannguigue-create/Retro-Padel/bd45ea0f881e79db3d14fce6ef93f7190f1a987a/logo_retro_padel.png" 
              width="350">
         <h1 style="color:#1E3A8A; font-family: Arial, sans-serif;">
             🎾 Tournoi de Padel - Retro Padel
@@ -25,6 +25,8 @@ st.markdown(
     </div>
     """,
     unsafe_allow_html=True
+)
+
 )
 
 
@@ -191,6 +193,7 @@ if st.button("📊 Calculer le classement"):
     with col2:
         st.write("🏅 Top 8 Femmes")
         st.dataframe(top_f)
+
 
 
 
