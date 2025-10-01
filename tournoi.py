@@ -183,18 +183,85 @@ if not st.session_state.classement.empty:
         st.success("✅ Phases finales générées !")
 
 # ========================
-# PHASES FINALES
+# PHASES FINALES AUTOMATISÉES
 # ========================
+
+def generer_matchs_elimination(df, phase):
+    """Retourne la liste des matchs pour la phase donnée"""
+    matchs = []
+    if phase == "quarts":
+        for i in range(4):
+            j1 = df.iloc[i]["Joueur"]
+            j2 = df.iloc[7-i]["Joueur"]
+            matchs.append((j1, j2))
+    elif phase == "demis":
+        for i in range(2):
+            j1 = st.session_state.phases_finales["quarts_gagnants"][i]
+            j2 = st.session_state.phases_finales["quarts_gagnants"][3-i]
+            matchs.append((j1, j2))
+    elif phase == "finale":
+        j1 = st.session_state.phases_finales["demis_gagnants"][0]
+        j2 = st.session_state.phases_finales["demis_gagnants"][1]
+        matchs.append((j1, j2))
+    return matchs
+
+
+def afficher_matchs_phase(phase):
+    """Affiche les matchs d'une phase et saisie des scores"""
+    st.markdown(f"### {phase.capitalize()}")
+
+    matchs = st.session_state.phases_finales[phase]
+    gagnants = []
+
+    for idx, (j1, j2) in enumerate(matchs, 1):
+        score = st.text_input(f"{j1} vs {j2} (Score {phase} Match {idx})", key=f"{phase}_match{idx}")
+        if score:
+            try:
+                s1, s2 = map(int, score.split("-"))
+                if s1 > s2:
+                    gagnants.append(j1)
+                else:
+                    gagnants.append(j2)
+            except:
+                st.warning("Format invalide, utilisez X-Y (ex: 6-4).")
+
+    return gagnants
+
+
+# === Génération automatique des 1/4 ===
+if st.button("⚡ Générer les 1/4 de finale"):
+    df = st.session_state.classement
+    if not df.empty and len(df) >= 8:
+        st.session_state.phases_finales["quarts"] = generer_matchs_elimination(df, "quarts")
+        st.success("✅ 1/4 de finale générés !")
+
+# === Jouer les 1/4 ===
 if "quarts" in st.session_state.phases_finales:
-    st.subheader("🏆 Phases Finales")
+    st.session_state.phases_finales["quarts_gagnants"] = afficher_matchs_phase("quarts")
 
-    if st.button("➡️ Jouer les 1/4"):
-        st.write("Affichage des quarts de finale ici...")
-    if st.button("➡️ Jouer les 1/2"):
-        st.write("Affichage des demi-finales ici...")
-    if st.button("➡️ Jouer la Finale"):
-        st.write("Affichage de la finale ici...")
+# === Jouer les 1/2 ===
+if "quarts_gagnants" in st.session_state.phases_finales and len(st.session_state.phases_finales["quarts_gagnants"]) == 4:
+    if st.button("⚡ Générer les 1/2 finales"):
+        st.session_state.phases_finales["demis"] = generer_matchs_elimination(None, "demis")
+        st.success("✅ 1/2 finales générées !")
 
-    if st.button("♻️ Reset Phases Finales"):
-        st.session_state.phases_finales = {}
-        st.warning("Phases finales réinitialisées.")
+if "demis" in st.session_state.phases_finales:
+    st.session_state.phases_finales["demis_gagnants"] = afficher_matchs_phase("demis")
+
+# === Jouer la finale ===
+if "demis_gagnants" in st.session_state.phases_finales and len(st.session_state.phases_finales["demis_gagnants"]) == 2:
+    if st.button("⚡ Générer la Finale"):
+        st.session_state.phases_finales["finale"] = generer_matchs_elimination(None, "finale")
+        st.success("🏆 Finale générée !")
+
+if "finale" in st.session_state.phases_finales:
+    vainqueur = afficher_matchs_phase("finale")
+    if vainqueur:
+        st.success(f"🏆 Le grand vainqueur du tournoi est **{vainqueur[0]}** !")
+
+# === Reset uniquement phases finales ===
+if st.button("♻️ Reset Phases Finales"):
+    st.session_state.phases_finales = {}
+    st.warning("Phases finales réinitialisées.")
+
+
