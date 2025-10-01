@@ -46,9 +46,8 @@ with st.sidebar:
     matchs_max = st.number_input("Nombre maximum de matchs par joueur", 1, 20, 4)
 
     if st.button("♻️ Reset Tournoi"):
-        st.session_state.matches = []
-        st.session_state.rounds = []
-        st.session_state.classement = pd.DataFrame()
+        for key in ["matches", "rounds", "classement", "phases_finales"]:
+            st.session_state[key] = []
         st.success("Le tournoi a été réinitialisé.")
 
 # ========================
@@ -59,7 +58,9 @@ if "matches" not in st.session_state:
 if "rounds" not in st.session_state:
     st.session_state.rounds = []
 if "classement" not in st.session_state:
-    st.session_state.classement = pd.DataFrame(columns=["Joueur", "Points", "Jeux", "Matchs"])
+    st.session_state.classement = pd.DataFrame()
+if "phases_finales" not in st.session_state:
+    st.session_state.phases_finales = {}
 
 # ========================
 # GÉNÉRATION DES MATCHS
@@ -115,7 +116,9 @@ def maj_classement(matches):
 
     classement = pd.DataFrame.from_dict(data, orient="index").reset_index()
     classement = classement.rename(columns={"index": "Joueur"})
+    # Correction → index 1,2,3… et pas 0
     classement = classement.sort_values(by=["Points", "Jeux"], ascending=[False, False]).reset_index(drop=True)
+    classement.index += 1
     return classement
 
 # ========================
@@ -123,7 +126,6 @@ def maj_classement(matches):
 # ========================
 st.subheader("🎲 Gestion des matchs")
 
-# Vérifier si un joueur a atteint le maximum
 def joueur_a_atteint_max(matches, max_matchs):
     compteur = {}
     for m in matches:
@@ -140,7 +142,7 @@ if st.button("➕ Générer un nouveau round", disabled=bloque):
     for terrain, match in enumerate(nouveau_round, 1):
         st.session_state.matches.append({"A": match[0], "B": match[1], "score": "", "round": len(st.session_state.rounds), "terrain": terrain})
 
-# Affichage des rounds et saisie des scores
+# Affichage des rounds
 for r, round_matches in enumerate(st.session_state.rounds, 1):
     st.markdown(f"## 🏆 Round {r}")
     for terrain, match in enumerate(round_matches, 1):
@@ -160,3 +162,39 @@ if st.button("📊 Calculer le classement"):
 if not st.session_state.classement.empty:
     st.subheader("🏅 Classement Général")
     st.dataframe(st.session_state.classement)
+
+    # Top 8
+    top_hommes = st.session_state.classement[st.session_state.classement["Joueur"].isin(hommes)].head(8)
+    top_femmes = st.session_state.classement[st.session_state.classement["Joueur"].isin(femmes)].head(8)
+
+    st.markdown("### 👨 Top 8 Hommes")
+    st.dataframe(top_hommes)
+    st.markdown("### 👩 Top 8 Femmes")
+    st.dataframe(top_femmes)
+
+    # Génération phases finales
+    if st.button("⚡ Générer phases finales"):
+        st.session_state.phases_finales["quarts"] = [
+            (["1H", "8F"], ["4H", "5F"]),
+            (["2H", "7F"], ["3H", "6F"]),
+            (["1F", "8H"], ["4F", "5H"]),
+            (["2F", "7H"], ["3F", "6H"])
+        ]
+        st.success("✅ Phases finales générées !")
+
+# ========================
+# PHASES FINALES
+# ========================
+if "quarts" in st.session_state.phases_finales:
+    st.subheader("🏆 Phases Finales")
+
+    if st.button("➡️ Jouer les 1/4"):
+        st.write("Affichage des quarts de finale ici...")
+    if st.button("➡️ Jouer les 1/2"):
+        st.write("Affichage des demi-finales ici...")
+    if st.button("➡️ Jouer la Finale"):
+        st.write("Affichage de la finale ici...")
+
+    if st.button("♻️ Reset Phases Finales"):
+        st.session_state.phases_finales = {}
+        st.warning("Phases finales réinitialisées.")
