@@ -102,13 +102,20 @@ def maj_classement(matchs, scores):
 def ajouter_stats(joueur, jeux_gagnes, jeux_perdus):
     df = st.session_state.classement
     if joueur not in df["Joueur"].values:
-        df = pd.concat([df, pd.DataFrame([[joueur, 0, 0, 0]], columns=["Joueur", "Points", "Jeux", "Matchs"])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([[joueur, 0.0, 0, 0]], columns=["Joueur", "Points", "Jeux", "Matchs"])], ignore_index=True)
 
+    # Points de base (3 si victoire, sinon 1)
     points = 3 if jeux_gagnes > jeux_perdus else 1
-    df.loc[df["Joueur"] == joueur, "Points"] += points
+
+    # Bonus : 0.1 point par jeu gagné
+    bonus = jeux_gagnes * 0.1
+
+    df.loc[df["Joueur"] == joueur, "Points"] += points + bonus
     df.loc[df["Joueur"] == joueur, "Jeux"] += jeux_gagnes
     df.loc[df["Joueur"] == joueur, "Matchs"] += 1
+
     st.session_state.classement = df
+
 
 def afficher_classement():
     if not st.session_state.classement.empty:
@@ -194,3 +201,4 @@ if st.session_state.demis:
 if st.session_state.finale:
     st.subheader("Finale")
     jouer_phase(st.session_state.finale, "Finale")
+
