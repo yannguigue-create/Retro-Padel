@@ -1,6 +1,7 @@
 import streamlit as st
 import random
 import pandas as pd
+import os
 
 # --- Initialisation ---
 if "joueurs" not in st.session_state:
@@ -22,14 +23,14 @@ if "femmes_list" not in st.session_state:
 st.sidebar.header("⚙️ Paramètres du tournoi")
 
 hommes_input = st.sidebar.text_area(
-    "Liste des hommes (un par ligne)", 
-    height=150, 
+    "Liste des hommes (un par ligne)",
+    height=150,
     key="hommes_input",
     value=st.session_state.hommes_list
 )
 femmes_input = st.sidebar.text_area(
-    "Liste des femmes (un par ligne)", 
-    height=150, 
+    "Liste des femmes (un par ligne)",
+    height=150,
     key="femmes_input",
     value=st.session_state.femmes_list
 )
@@ -74,7 +75,7 @@ for f in femmes:
     if f not in st.session_state.joueurs:
         st.session_state.joueurs[f] = {"Points": 0.0, "Jeux": 0, "Matchs": 0, "Sexe": "F"}
 
-# --- Comptage des matchs PLANIFIÉS (pour respecter le plafond à la génération) ---
+# --- Comptage des matchs PLANIFIÉS (respect plafond) ---
 def scheduled_counts():
     counts = {j: 0 for j in st.session_state.joueurs}
     for rnd in st.session_state.matchs:
@@ -83,6 +84,26 @@ def scheduled_counts():
                 if p in counts:
                     counts[p] += 1
     return counts
+
+# --- Compactage : tasser les matchs pour remplir les rounds ---
+def compact_rounds(nb_terrains_dispo: int):
+    """
+    Déplace les matchs des rounds suivants vers les rounds précédents
+    pour remplir jusqu'à nb_terrains par round (suppression des trous).
+    """
+    i = 0
+    while i < len(st.session_state.matchs) - 1:
+        rnd = st.session_state.matchs[i]
+        nxt = st.session_state.matchs[i + 1]
+        # Tant que le round i n'est pas plein et que le round i+1 a des matchs
+        while len(rnd) < nb_terrains_dispo and len(nxt) > 0:
+            rnd.append(nxt.pop(0))
+        # Si le round suivant est vide, on le supprime
+        if len(nxt) == 0:
+            del st.session_state.matchs[i + 1]
+            # ne pas avancer i : on reteste le même i avec le nouveau suivant
+            continue
+        i += 1
 
 # --- Génération d'un round ---
 def generer_round():
@@ -111,6 +132,8 @@ def generer_round():
 
     if matchs:
         st.session_state.matchs.append(matchs)
+        # Tasser immédiatement
+        compact_rounds(nb_terrains_dispo)
         return True, len(matchs)
     return False, 0
 
@@ -118,16 +141,17 @@ def generer_round():
 def generer_tous_les_rounds():
     total_rounds_crees = 0
     total_matchs_crees = 0
-    # Boucle jusqu’à ce qu’aucun nouveau round ne puisse être créé
     while True:
         ok, nbm = generer_round()
         if not ok:
             break
         total_rounds_crees += 1
         total_matchs_crees += nbm
+    # Un compactage final pour être sûr de ne laisser aucun “trou”
+    compact_rounds(st.session_state.get("nb_terrains", 2))
     return total_rounds_crees, total_matchs_crees
 
-# --- Classement (recalcule depuis les scores) ---
+# --- Classement ---
 def maj_classement():
     for j in st.session_state.joueurs:
         st.session_state.joueurs[j]["Points"] = 0.0
@@ -159,7 +183,7 @@ def maj_classement():
                 st.session_state.joueurs[p]["Jeux"] += jp
                 st.session_state.joueurs[p]["Matchs"] += 1
 
-# --- Affichage du classement (Points = 1 décimale) ---
+# --- Affichage du classement ---
 def afficher_classement():
     if not st.session_state.joueurs:
         st.warning("Aucun joueur enregistré")
@@ -173,7 +197,7 @@ def afficher_classement():
     df = df[["Rang", "Joueur", "Sexe", "Points_aff", "Jeux", "Matchs"]].rename(columns={"Points_aff": "Points"})
     st.table(df)
 
-# --- Top 8 Hommes / Femmes visibles en permanence ---
+# --- Top 8 Hommes / Femmes ---
 def afficher_top8_permanents():
     if not st.session_state.joueurs:
         return
@@ -191,7 +215,7 @@ def afficher_top8_permanents():
         st.subheader("👩 Top 8 Femmes (live)")
         st.table(df[df["Sexe"] == "F"][cols].head(8))
 
-# --- Quarts = Top8 H + Top8 F -> 8 équipes H+F, tirage ALÉATOIRE pour 4 quarts ---
+# --- Quarts = Top8 H + Top8 F ---
 def generer_quarts_top8_hf():
     maj_classement()
     hommes_tries = sorted(
@@ -222,7 +246,6 @@ def generer_quarts_top8_hf():
     st.success("✅ Quarts générés (Top8 H & Top8 F, tirage aléatoire) !")
     return True
 
-# --- Recomposition aléatoire (H séparés des F) à partir des gagnants ---
 def recomposer_equipes_mixtes_depuis_gagnants(gagnants):
     hommes = [eq[0] for eq in gagnants]
     femmes = [eq[1] for eq in gagnants]
@@ -230,8 +253,15 @@ def recomposer_equipes_mixtes_depuis_gagnants(gagnants):
     random.shuffle(femmes)
     return [[hommes[i], femmes[i]] for i in range(len(gagnants))]
 
-# --- UI ---
-st.title("🎾 Tournoi de Padel - Rétro Padel")
+# --- UI (logo + titre) ---
+def show_logo_or_title():
+    if os.path.exists("logo_retro_padel.png"):
+        st.image("logo_retro_padel.png", width=260)
+        st.markdown("### ")
+    else:
+        st.title("🎾 Tournoi de Padel - Rétro Padel")
+
+show_logo_or_title()
 
 # Information & Génération des rounds
 if len(hommes) < 2 or len(femmes) < 2:
@@ -264,7 +294,7 @@ else:
                     st.warning("Aucun round supplémentaire n’a pu être généré.")
                 st.rerun()
 
-# Affichage des rounds & saisie des scores
+# Affichage des rounds & scores
 if st.session_state.matchs:
     st.header("📋 Matchs du tournoi")
     for r, matchs in enumerate(st.session_state.matchs, 1):
