@@ -327,7 +327,7 @@ if st.session_state.phases_finales["quarts"]:
             (gagnants_quarts[2], gagnants_quarts[3])
         ]
         # NE PAS vider les quarts -> restent affichés
-        st.experimental_rerun()
+        st.rerun()
 
 # Demis (toujours visibles)
 if st.session_state.phases_finales["demis"]:
@@ -350,7 +350,7 @@ if st.session_state.phases_finales["demis"]:
         random.shuffle(gagnants_demis)  # tirage aléatoire des gagnants
         st.session_state.phases_finales["finale"] = [(gagnants_demis[0], gagnants_demis[1])]
         # NE PAS vider les demis -> restent affichés
-        st.experimental_rerun()
+        st.rerun()
 
 # Finale
 if st.session_state.phases_finales["finale"]:
@@ -368,7 +368,7 @@ if st.session_state.phases_finales["finale"]:
                 if st.button("🏅 Valider le vainqueur"):
                     st.session_state.phases_finales["vainqueur"] = vainqueur
                     # on garde la finale affichée tant que tu ne resets pas
-                    st.experimental_rerun()
+                    st.rerun()
             except:
                 pass
 
