@@ -2,197 +2,161 @@ import streamlit as st
 import pandas as pd
 import random
 
-# ==========================
-# CONFIG PAGE
-# ==========================
+# =========================
+# CONFIGURATION PAGE
+# =========================
 st.set_page_config(
-    page_title="Tournoi de Padel - Retro Padel",
+    page_title="Tournoi de Padel - Rétro Padel",
     page_icon="🎾",
     layout="wide"
 )
 
-# ==============================
+# =========================
 # LOGO + TITRE
-# ==============================
+# =========================
 st.markdown(
-    """
+    f"""
     <div style="text-align: center;">
-        <img src="https://raw.githubusercontent.com/yannguigue-create/Retro-Padel/bd45ea0f881e79db3d14fce6ef93f7190f1a987a/logo_retro_padel.png" 
-             width="350">
-        <h1 style="color:#1E3A8A; font-family: Arial, sans-serif;">
-            🎾 Tournoi de Padel - Retro Padel
-        </h1>
+        <img src="https://raw.githubusercontent.com/yannguigue-create/Retro-Padel/main/logo_retro_padel.png" width="300">
+        <h1 style="color:#1E3A8A; font-family: Arial, sans-serif;">🎾 Tournoi de Padel - Retro Padel</h1>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-# ==========================
-# PARAMÈTRES TOURNOI
-# ==========================
+# =========================
+# PARAMÈTRES
+# =========================
 with st.sidebar:
     st.header("⚙️ Paramètres du tournoi")
-
     hommes_input = st.text_area("Liste des hommes (un par ligne)", "Yann\nRomuald\nMatthieu\nKarl")
     femmes_input = st.text_area("Liste des femmes (un par ligne)", "Sabine\nElyse\nGarance\nMonica")
 
-    # Transformation en liste
     hommes = [h.strip() for h in hommes_input.split("\n") if h.strip()]
     femmes = [f.strip() for f in femmes_input.split("\n") if f.strip()]
 
-    # Compteurs
-    nb_h = len(hommes)
-    nb_f = len(femmes)
-    nb_total = nb_h + nb_f
+    st.markdown(f"👨 Hommes : **{len(hommes)}**")
+    st.markdown(f"👩 Femmes : **{len(femmes)}**")
+    st.markdown(f"📊 Total joueurs : **{len(hommes) + len(femmes)}**")
 
-    st.markdown(f"👨 Hommes : **{nb_h}**")
-    st.markdown(f"👩 Femmes : **{nb_f}**")
-    st.markdown(f"🔢 Total joueurs : **{nb_total}**")
+    nb_terrains = st.number_input("Nombre de terrains disponibles", 1, 10, 4)
+    min_matchs = st.number_input("Nombre minimum de matchs par joueur", 1, 10, 4)
 
-    nb_terrains = st.number_input("Nombre de terrains disponibles", min_value=1, max_value=10, value=4)
-    nb_min_matchs = st.number_input("Nombre minimum de matchs par joueur", min_value=1, max_value=10, value=4)
+    if st.button("♻️ Reset Tournoi"):
+        st.session_state.matches = []
+        st.session_state.resultats = []
+        st.session_state.round = 0
+        st.success("Le tournoi a été réinitialisé !")
 
-    reset = st.button("♻️ Reset Tournoi")
+# Initialisation des variables globales
+if "matches" not in st.session_state:
+    st.session_state.matches = []
+if "resultats" not in st.session_state:
+    st.session_state.resultats = []
+if "round" not in st.session_state:
+    st.session_state.round = 0
 
+# =========================
+# GÉNÉRATION DES MATCHS
+# =========================
+def generer_round():
+    st.session_state.round += 1
+    round_matches = []
+    joueurs_h = hommes.copy()
+    joueurs_f = femmes.copy()
+    random.shuffle(joueurs_h)
+    random.shuffle(joueurs_f)
 
+    nb_matchs = min(len(joueurs_h), len(joueurs_f)) // 2 * 2
+    terrains = list(range(1, nb_terrains+1))
+    rotation = 1
 
-    hommes = [h.strip() for h in hommes_input.split("\n") if h.strip()]
-    femmes = [f.strip() for f in femmes_input.split("\n") if f.strip()]
+    for i in range(0, nb_matchs, 2):
+        if len(terrains) == 0:
+            terrains = list(range(1, nb_terrains+1))
+            rotation += 1
+        terrain = terrains.pop(0)
 
-# ==========================
-# SESSION STATE
-# ==========================
-if "rounds" not in st.session_state or reset:
-    st.session_state.rounds = []
-if "classement" not in st.session_state or reset:
-    st.session_state.classement = pd.DataFrame(columns=["Joueur", "Sexe", "Points", "Jeux"])
-if "match_count" not in st.session_state or reset:
-    st.session_state.match_count = {j: 0 for j in hommes + femmes}
+        h1, h2 = joueurs_h[i], joueurs_h[i+1]
+        f1, f2 = joueurs_f[i], joueurs_f[i+1]
+        equipe_a = f"{h1} + {f1}"
+        equipe_b = f"{h2} + {f2}"
 
-# ==========================
-# GÉNÉRATION D'UN ROUND
-# ==========================
-def generer_round(round_num, nb_terrains):
-    joueurs_dispo = [(h, "H") for h in hommes] + [(f, "F") for f in femmes]
-    random.shuffle(joueurs_dispo)
-    joueurs_dispo.sort(key=lambda x: st.session_state.match_count[x[0]])
-
-    equipes = []
-    while len(joueurs_dispo) >= 2:
-        h = next((j for j in joueurs_dispo if j[1] == "H"), None)
-        f = next((j for j in joueurs_dispo if j[1] == "F"), None)
-        if not h or not f:
-            break
-        equipes.append((h[0], f[0]))
-        joueurs_dispo.remove(h)
-        joueurs_dispo.remove(f)
-
-    random.shuffle(equipes)
-
-    matchs = []
-    for i in range(0, len(equipes), 2):
-        if i+1 < len(equipes):
-            teamA = equipes[i][0] + " + " + equipes[i][1]
-            teamB = equipes[i+1][0] + " + " + equipes[i+1][1]
-            matchs.append((teamA, teamB))
-            for j in [equipes[i][0], equipes[i][1], equipes[i+1][0], equipes[i+1][1]]:
-                st.session_state.match_count[j] += 1
-
-    planning = []
-    for i, (teamA, teamB) in enumerate(matchs, start=1):
-        terrain = ((i - 1) % nb_terrains) + 1
-        rotation = ((i - 1) // nb_terrains) + 1
-        planning.append({
-            "Round": round_num,
-            "Match": i,
-            "Terrain": terrain,
+        round_matches.append({
+            "Round": st.session_state.round,
             "Rotation": rotation,
-            "Équipe A": teamA,
-            "Équipe B": teamB,
-            "Score": ""
+            "Terrain": terrain,
+            "Equipe A": equipe_a,
+            "Equipe B": equipe_b,
+            "Score": "",
+            "Vainqueur": ""
         })
-    return planning
 
-# ==========================
+    st.session_state.matches.extend(round_matches)
+
+# =========================
 # CLASSEMENT
-# ==========================
-def maj_classement():
-    data = []
-    for r in st.session_state.rounds:
-        for m in r:
-            score = m["Score"]
-            if score:
-                try:
-                    scA, scB = map(int, score.split("-"))
-                except:
-                    continue
-                joueursA = m["Équipe A"].split(" + ")
-                joueursB = m["Équipe B"].split(" + ")
+# =========================
+def calculer_classement():
+    joueurs = {j: {"Points": 0, "Jeux": 0} for j in hommes + femmes}
+    
+    for match in st.session_state.matches:
+        if match["Score"]:
+            try:
+                sc_a, sc_b = map(int, match["Score"].split("-"))
+            except:
+                continue
+            if sc_a > sc_b:
+                match["Vainqueur"] = "Equipe A"
+                pts_a, pts_b = 3, 0.5
+            elif sc_b > sc_a:
+                match["Vainqueur"] = "Equipe B"
+                pts_a, pts_b = 0.5, 3
+            else:
+                pts_a = pts_b = 1.5
 
-                if scA > scB:
-                    ptsA, ptsB = 3, 0.5
-                elif scB > scA:
-                    ptsA, ptsB = 0.5, 3
-                else:
-                    ptsA, ptsB = 1, 1
+            eqA = match["Equipe A"].split(" + ")
+            eqB = match["Equipe B"].split(" + ")
+            for j in eqA:
+                joueurs[j]["Points"] += pts_a
+                joueurs[j]["Jeux"] += sc_a
+            for j in eqB:
+                joueurs[j]["Points"] += pts_b
+                joueurs[j]["Jeux"] += sc_b
 
-                for j in joueursA:
-                    data.append([j, "H" if j in hommes else "F", ptsA, scA])
-                for j in joueursB:
-                    data.append([j, "H" if j in hommes else "F", ptsB, scB])
+    df = pd.DataFrame([
+        {"Joueur": j, "Points": d["Points"], "Jeux": d["Jeux"]}
+        for j, d in joueurs.items()
+    ])
 
-    df = pd.DataFrame(data, columns=["Joueur", "Sexe", "Points", "Jeux"])
-    classement = df.groupby(["Joueur", "Sexe"]).sum().reset_index()
-    classement = classement.sort_values(by=["Points", "Jeux"], ascending=False)
-    st.session_state.classement = classement
+    df = df.sort_values(by=["Points", "Jeux"], ascending=[False, False]).reset_index(drop=True)
+    df.index += 1  # ajoute une colonne Rang
+    return df
 
-# ==========================
+# =========================
 # INTERFACE
-# ==========================
+# =========================
 st.subheader("🎲 Gestion des matchs")
-
 if st.button("➕ Générer un nouveau round"):
-    round_num = len(st.session_state.rounds) + 1
-    new_round = generer_round(round_num, nb_terrains)
-    st.session_state.rounds.append(new_round)
+    generer_round()
 
-# AFFICHAGE DES ROUNDS
-for r in st.session_state.rounds:
-    st.markdown(f"## 🏟 Round {r[0]['Round']}")
-    for rot in sorted(set([m["Rotation"] for m in r])):
-        st.markdown(f"### 🔄 Rotation {rot}")
-        cols = st.columns(nb_terrains)
-        for t in range(1, nb_terrains+1):
-            matchs_terrain = [m for m in r if m["Rotation"]==rot and m["Terrain"]==t]
-            if matchs_terrain:
-                match = matchs_terrain[0]
-                with cols[t-1]:
-                    st.write(f"**Terrain {t}**")
-                    st.write(f"{match['Équipe A']} vs {match['Équipe B']}")
-                    score = st.text_input(f"Score Round {match['Round']} Match {match['Match']}", match["Score"])
-                    match["Score"] = score
-
-# ==========================
-# CLASSEMENT + TOP 8
-# ==========================
-if st.button("📊 Calculer le classement"):
-    maj_classement()
-    st.write("### Classement général")
-    st.dataframe(st.session_state.classement)
-
-    top_h = st.session_state.classement[st.session_state.classement["Sexe"]=="H"].head(8)
-    top_f = st.session_state.classement[st.session_state.classement["Sexe"]=="F"].head(8)
-
-    col1, col2 = st.columns(2)
+for match in st.session_state.matches:
+    col1, col2, col3 = st.columns([2,2,1])
     with col1:
-        st.write("🏅 Top 8 Hommes")
-        st.dataframe(top_h)
+        st.write(f"**{match['Equipe A']}**")
     with col2:
-        st.write("🏅 Top 8 Femmes")
-        st.dataframe(top_f)
+        st.write(f"**{match['Equipe B']}**")
+    with col3:
+        score = st.text_input(f"Score Round {match['Round']} Terrain {match['Terrain']}", value=match["Score"], key=f"score_{match['Round']}_{match['Terrain']}")
+        match["Score"] = score
 
+if st.button("📊 Calculer le classement"):
+    classement = calculer_classement()
+    st.subheader("🏆 Classement général")
+    st.dataframe(classement)
 
+    st.subheader("👨 Top 8 Hommes")
+    st.dataframe(classement[classement["Joueur"].isin(hommes)].head(8))
 
-
-
-
+    st.subheader("👩 Top 8 Femmes")
+    st.dataframe(classement[classement["Joueur"].isin(femmes)].head(8))
