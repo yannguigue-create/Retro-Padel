@@ -84,20 +84,26 @@ def generer_matchs(hommes, femmes, terrains, max_matchs):
                 matchs.append((eq1, eq2))
     return matchs[:terrains]
 
-def maj_classement(matchs, scores):
-    """Met à jour le classement en fonction des scores"""
-    for (eq1, eq2), score in zip(matchs, scores):
-        if not score or "-" not in score:
-            continue
-        try:
-            s1, s2 = map(int, score.split("-"))
-        except:
-            continue
+def ajouter_stats(joueur, jeux_gagnes, jeux_perdus):
+    df = st.session_state.classement
+    if joueur not in df["Joueur"].values:
+        df = pd.concat([df, pd.DataFrame([[joueur, 0.0, 0, 0]], 
+                        columns=["Joueur", "Points", "Jeux", "Matchs"])], 
+                        ignore_index=True)
 
-        for joueur in eq1:
-            ajouter_stats(joueur, s1, s2)
-        for joueur in eq2:
-            ajouter_stats(joueur, s2, s1)
+    # Points de base : 3 si victoire, 1 si défaite
+    points = 3 if jeux_gagnes > jeux_perdus else 1
+
+    # Bonus : 0.1 point par jeu gagné
+    bonus = jeux_gagnes * 0.1
+
+    # MAJ du tableau
+    df.loc[df["Joueur"] == joueur, "Points"] += points + bonus
+    df.loc[df["Joueur"] == joueur, "Jeux"] += jeux_gagnes   # seulement les jeux réels
+    df.loc[df["Joueur"] == joueur, "Matchs"] += 1
+
+    st.session_state.classement = df
+
 
 def ajouter_stats(joueur, jeux_gagnes, jeux_perdus):
     df = st.session_state.classement
@@ -201,4 +207,5 @@ if st.session_state.demis:
 if st.session_state.finale:
     st.subheader("Finale")
     jouer_phase(st.session_state.finale, "Finale")
+
 
