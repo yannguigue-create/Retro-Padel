@@ -2,43 +2,33 @@ import streamlit as st
 import pandas as pd
 import random
 
-# ==============================
+# ========================
 # CONFIGURATION PAGE
-# ==============================
+# ========================
 st.set_page_config(
-    page_title="Tournoi de Padel - Rétro Padel",
+    page_title="Tournoi de Padel - Retro Padel",
     page_icon="🎾",
     layout="wide"
 )
 
-# ==============================
+# ========================
 # LOGO + TITRE
-# ==============================
+# ========================
 st.markdown(
-    """
+    f"""
     <div style="text-align: center;">
         <img src="https://raw.githubusercontent.com/yannguigue-create/Retro-Padel/main/logo_retro_padel.png" width="300">
         <h1 style="color:#1E3A8A; font-family: Arial, sans-serif;">
-        🎾 Tournoi de Padel - Retro Padel
+            🎾 Tournoi de Padel - Retro Padel
         </h1>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-# ==============================
-# INIT SESSION STATE
-# ==============================
-if "rounds" not in st.session_state:
-    st.session_state.rounds = []
-if "classement" not in st.session_state:
-    st.session_state.classement = pd.DataFrame()
-if "finales" not in st.session_state:
-    st.session_state.finales = []
-
-# ==============================
-# PARAMÈTRES DU TOURNOI
-# ==============================
+# ========================
+# PARAMÈTRES
+# ========================
 with st.sidebar:
     st.header("⚙️ Paramètres du tournoi")
 
@@ -48,148 +38,120 @@ with st.sidebar:
     hommes = [h.strip() for h in hommes_input.split("\n") if h.strip()]
     femmes = [f.strip() for f in femmes_input.split("\n") if f.strip()]
 
-    st.markdown(f"👨 Hommes : {len(hommes)}")
-    st.markdown(f"👩 Femmes : {len(femmes)}")
-    st.markdown(f"🔢 Total joueurs : {len(hommes) + len(femmes)}")
+    st.markdown(f"👨 Hommes : **{len(hommes)}**")
+    st.markdown(f"👩 Femmes : **{len(femmes)}**")
+    st.markdown(f"📊 Total joueurs : **{len(hommes) + len(femmes)}**")
 
     terrains = st.number_input("Nombre de terrains disponibles", 1, 10, 4)
-    matchs_min = st.number_input("Nombre minimum de matchs par joueur", 1, 10, 4)
+    matchs_max = st.number_input("Nombre maximum de matchs par joueur", 1, 20, 4)
 
     if st.button("♻️ Reset Tournoi"):
+        st.session_state.matches = []
         st.session_state.rounds = []
         st.session_state.classement = pd.DataFrame()
-        st.session_state.finales = []
-        st.success("Tournoi réinitialisé ✅")
+        st.success("Le tournoi a été réinitialisé.")
 
-# ==============================
-# FONCTION GÉNÉRATION DE ROUND
-# ==============================
+# ========================
+# INIT SESSION STATE
+# ========================
+if "matches" not in st.session_state:
+    st.session_state.matches = []
+if "rounds" not in st.session_state:
+    st.session_state.rounds = []
+if "classement" not in st.session_state:
+    st.session_state.classement = pd.DataFrame(columns=["Joueur", "Points", "Jeux"])
+
+# ========================
+# GÉNÉRATION DES MATCHS
+# ========================
 def generer_round(hommes, femmes, terrains):
-    joueurs = hommes + femmes
-    random.shuffle(joueurs)
-    round_matchs = []
+    joueurs_dispo = hommes + femmes
+    random.shuffle(joueurs_dispo)
 
-    for t in range(terrains):
-        if len(joueurs) < 4:
-            break
-        equipeA = [joueurs.pop(), joueurs.pop()]
-        equipeB = [joueurs.pop(), joueurs.pop()]
-        round_matchs.append((equipeA, equipeB))
+    matches_round = []
+    for i in range(0, min(len(joueurs_dispo), terrains * 4), 4):
+        equipeA = [joueurs_dispo[i], joueurs_dispo[i+1]]
+        equipeB = [joueurs_dispo[i+2], joueurs_dispo[i+3]]
+        matches_round.append((equipeA, equipeB))
+    return matches_round
 
-    return round_matchs
+# ========================
+# CLASSEMENT
+# ========================
+def maj_classement(matches):
+    data = {}
+    for match in matches:
+        score = match.get("score")
+        if not score:
+            continue
+        try:
+            sA, sB = map(int, score.split("-"))
+        except:
+            continue
 
-# ==============================
-# GESTION DES MATCHS
-# ==============================
+        equipeA, equipeB = match["A"], match["B"]
+
+        # Victoire = 3 points, défaite = 1 point
+        if sA > sB:
+            ptsA, ptsB = 3, 1
+        elif sB > sA:
+            ptsA, ptsB = 1, 3
+        else:
+            ptsA, ptsB = 2, 2
+
+        for j in equipeA:
+            if j not in data:
+                data[j] = {"Points": 0, "Jeux": 0}
+            data[j]["Points"] += ptsA
+            data[j]["Jeux"] += sA
+
+        for j in equipeB:
+            if j not in data:
+                data[j] = {"Points": 0, "Jeux": 0}
+            data[j]["Points"] += ptsB
+            data[j]["Jeux"] += sB
+
+    classement = pd.DataFrame.from_dict(data, orient="index").reset_index()
+    classement = classement.rename(columns={"index": "Joueur"})
+    classement = classement.sort_values(by=["Points", "Jeux"], ascending=[False, False]).reset_index(drop=True)
+    return classement
+
+# ========================
+# INTERFACE MATCHS
+# ========================
 st.subheader("🎲 Gestion des matchs")
 
-# Vérification quota minimum avant nouveau round
+# Bloquer la génération si certains joueurs ont atteint le maximum
 bloque = False
 if not st.session_state.classement.empty:
-    matchs_par_joueur = st.session_state.classement.copy()
-    matchs_par_joueur["Matchs"] = (matchs_par_joueur["Points"] // 3) + (matchs_par_joueur["Points"] % 3 > 0).astype(int)
-    if all(matchs_par_joueur["Matchs"] >= matchs_min):
-        st.warning("✅ Tous les joueurs ont atteint le nombre minimum de matchs. Impossible de générer un nouveau round.")
+    joueurs = st.session_state.classement
+    if any(joueurs["Points"] // 3 >= matchs_max):
+        st.warning("⛔ Certains joueurs ont atteint le nombre maximum de matchs autorisés.")
         bloque = True
 
-if not bloque and st.button("➕ Générer un nouveau round"):
-    round_num = len(st.session_state.rounds) + 1
-    new_round = generer_round(hommes, femmes, terrains)
-    st.session_state.rounds.append(new_round)
+if st.button("➕ Générer un nouveau round", disabled=bloque):
+    nouveau_round = generer_round(hommes, femmes, terrains)
+    st.session_state.rounds.append(nouveau_round)
+    for terrain, match in enumerate(nouveau_round, 1):
+        st.session_state.matches.append({"A": match[0], "B": match[1], "score": "", "round": len(st.session_state.rounds), "terrain": terrain})
 
-# Affichage des matchs
-for r, round_matchs in enumerate(st.session_state.rounds, 1):
+# Affichage des rounds et saisie des scores
+for r, round_matches in enumerate(st.session_state.rounds, 1):
     st.markdown(f"## 🏆 Round {r}")
-    for t, match in enumerate(round_matchs, 1):
+    for terrain, match in enumerate(round_matches, 1):
         equipeA, equipeB = match
-        score_key = f"R{r}T{t}"
-        st.text_input(
-            f"{' + '.join(equipeA)} vs {' + '.join(equipeB)} (Score Round {r} Terrain {t})",
-            key=score_key
-        )
+        key = f"score_round{r}_terrain{terrain}"
+        score = st.text_input(f"{' + '.join(equipeA)} vs {' + '.join(equipeB)} (Score Round {r} Terrain {terrain})", key=key)
+        for m in st.session_state.matches:
+            if m["A"] == equipeA and m["B"] == equipeB and m["round"] == r and m["terrain"] == terrain:
+                m["score"] = score
 
-# ==============================
-# CALCUL DU CLASSEMENT
-# ==============================
-if st.button("📑 Calculer le classement"):
-    data = []
-    for r, round_matchs in enumerate(st.session_state.rounds, 1):
-        for t, match in enumerate(round_matchs, 1):
-            score_key = f"R{r}T{t}"
-            score = st.session_state.get(score_key, "")
-            if not score or "-" not in score:
-                continue
+# ========================
+# CLASSEMENT GÉNÉRAL
+# ========================
+if st.button("📊 Calculer le classement"):
+    st.session_state.classement = maj_classement(st.session_state.matches)
 
-            equipeA, equipeB = match
-            try:
-                a, b = map(int, score.split("-"))
-            except:
-                continue
-
-            if a > b:
-                gagnants, perdants = equipeA, equipeB
-            else:
-                gagnants, perdants = equipeB, equipeA
-
-            for joueur in gagnants:
-                data.append([joueur, 3, max(a, b)])
-            for joueur in perdants:
-                data.append([joueur, 1, min(a, b)])
-
-    df = pd.DataFrame(data, columns=["Joueur", "Points", "Jeux"])
-    st.session_state.classement = df.groupby("Joueur").sum().reset_index()
-    st.session_state.classement = st.session_state.classement.sort_values(
-        by=["Points", "Jeux"], ascending=[False, False]
-    ).reset_index(drop=True)
-
-    # Ajout du rang
-    st.session_state.classement.index = st.session_state.classement.index + 1
-    st.session_state.classement.reset_index(inplace=True)
-    st.session_state.classement.rename(columns={"index": "Rang"}, inplace=True)
-
-# Affichage du classement
 if not st.session_state.classement.empty:
+    st.subheader("🏅 Classement Général")
     st.dataframe(st.session_state.classement)
-
-    # Top 8 hommes
-    st.subheader("👨 Top 8 Hommes")
-    hommes_df = st.session_state.classement[st.session_state.classement["Joueur"].isin(hommes)]
-    st.table(hommes_df.head(8))
-
-    # Top 8 femmes
-    st.subheader("👩 Top 8 Femmes")
-    femmes_df = st.session_state.classement[st.session_state.classement["Joueur"].isin(femmes)]
-    st.table(femmes_df.head(8))
-
-# ==============================
-# PHASES FINALES
-# ==============================
-st.subheader("⚡ Phases finales")
-
-if st.button("⚡ Générer phases finales"):
-    if not st.session_state.classement.empty:
-        top8 = st.session_state.classement.head(8)["Joueur"].tolist()
-        random.shuffle(top8)
-        qf = [(top8[i], top8[i+1]) for i in range(0, 8, 2)]
-        st.session_state.finales = {"Quarts": qf, "Demi": [], "Finale": []}
-
-# Affichage des finales
-if st.session_state.finales:
-    if "Quarts" in st.session_state.finales:
-        st.markdown("### 🏅 Quarts de finale")
-        for i, match in enumerate(st.session_state.finales["Quarts"], 1):
-            st.text_input(f"Quart {i} : {match[0]} vs {match[1]}", key=f"QF{i}")
-
-    if "Demi" in st.session_state.finales and st.session_state.finales["Demi"]:
-        st.markdown("### 🥈 Demi-finales")
-        for i, match in enumerate(st.session_state.finales["Demi"], 1):
-            st.text_input(f"Demi {i} : {match[0]} vs {match[1]}", key=f"DF{i}")
-
-    if "Finale" in st.session_state.finales and st.session_state.finales["Finale"]:
-        st.markdown("### 🥇 Finale")
-        match = st.session_state.finales["Finale"][0]
-        st.text_input(f"Finale : {match[0]} vs {match[1]}", key="F1")
-
-    if st.button("↩️ Revenir en arrière"):
-        st.session_state.finales = []
-        st.warning("Retour en arrière effectué.")
