@@ -1,4 +1,4 @@
-import streamlit as st 
+import streamlit as st  
 import random
 import pandas as pd
 
@@ -153,7 +153,7 @@ def generer_tous_rounds():
 def _df_classement():
     df = pd.DataFrame.from_dict(st.session_state.joueurs, orient="index").reset_index()
     df = df.rename(columns={"index": "Joueur"})
-    # ➜ Points à **1 décimale**
+    # ➜ Points à **1 décimale** (demandé)
     df["Points"] = df["Points"].round(1)
     df["Jeux"] = df["Jeux"].astype(int)
     df["Matchs"] = df["Matchs"].astype(int)
@@ -209,6 +209,12 @@ def generer_quarts():
 
     st.session_state.phases_finales["quarts"] = quarts
     return True
+
+# --- utilitaire : split H/F d’une équipe ---
+def split_hf(team):
+    h = next(p for p in team if st.session_state.joueurs[p]["Sexe"] == "H")
+    f = next(p for p in team if st.session_state.joueurs[p]["Sexe"] == "F")
+    return h, f
 
 # ---------------- UI ----------------
 st.title("🎾 Tournoi de Padel - Rétro Padel")
@@ -348,32 +354,60 @@ if st.session_state.phases_finales["quarts"]:
                 except:
                     pass
 
-    # --- PAIRING ALÉATOIRE DES DEMIS EN ÉVITANT UNE REDITE DES QUARTS ---
+    # --- DEMIS : recomposition aléatoire (pas les mêmes paires qu'en quarts) ---
     if len(gagnants_quarts) == 4 and st.button("➡️ Valider & Tirage aléatoire des Demi-finales"):
-        # Paires "interdites" = les affiches déjà jouées en quarts
-        forbidden = set(
+        # Ensemble de TOUTES les équipes ayant existé en quarts (pour les interdire)
+        forbidden_teams = set(
+            frozenset(tuple(team))
+            for (a, b) in st.session_state.phases_finales["quarts"]
+            for team in (a, b)
+        )
+        # Ensemble des affiches de quarts (pour éviter la même confrontation)
+        forbidden_matches = set(
             frozenset((tuple(a), tuple(b)))
             for (a, b) in st.session_state.phases_finales["quarts"]
         )
 
-        # Essaie de tirer au hasard jusqu'à éviter une redite
-        winners = gagnants_quarts[:]
+        # On casse les équipes gagnantes -> 4 hommes, 4 femmes
+        H = []
+        F = []
+        for t in gagnants_quarts:
+            h, f = split_hf(t)
+            H.append(h)
+            F.append(f)
+
         ok = False
         for _ in range(1000):
-            random.shuffle(winners)
-            p1 = frozenset((tuple(winners[0]), tuple(winners[1])))
-            p2 = frozenset((tuple(winners[2]), tuple(winners[3])))
-            if p1 not in forbidden and p2 not in forbidden:
-                ok = True
-                break
-        if not ok:
-            # si impossible (très rare), on garde un tirage quelconque
-            pass
+            random.shuffle(H)
+            random.shuffle(F)
+            # 4 nouvelles équipes recomposées (H[i] + F[i])
+            teams = [[H[0], F[0]], [H[1], F[1]], [H[2], F[2]], [H[3], F[3]]]
 
-        st.session_state.phases_finales["demis"] = [
-            (winners[0], winners[1]),
-            (winners[2], winners[3])
-        ]
+            # Aucune équipe ne doit être égale à une équipe vue en quarts
+            if any(frozenset(tuple(t)) in forbidden_teams for t in teams):
+                continue
+
+            # Tirage aléatoire des affiches (2 demis)
+            random.shuffle(teams)
+            m1 = frozenset((tuple(teams[0]), tuple(teams[1])))
+            m2 = frozenset((tuple(teams[2]), tuple(teams[3])))
+
+            # On refuse les mêmes affiches qu'en quarts
+            if m1 in forbidden_matches or m2 in forbidden_matches:
+                continue
+
+            st.session_state.phases_finales["demis"] = [(teams[0], teams[1]),
+                                                        (teams[2], teams[3])]
+            ok = True
+            break
+
+        if not ok:
+            # En cas d'échec improbable, on fait au moins une recomposition simple
+            random.shuffle(H); random.shuffle(F)
+            teams = [[H[0], F[0]], [H[1], F[1]], [H[2], F[2]], [H[3], F[3]]]
+            random.shuffle(teams)
+            st.session_state.phases_finales["demis"] = [(teams[0], teams[1]),
+                                                        (teams[2], teams[3])]
         st.rerun()
 
 # Demis
@@ -394,7 +428,7 @@ if st.session_state.phases_finales["demis"]:
                     pass
 
     if len(gagnants_demis) == 2 and st.button("➡️ Valider & Tirage de la Finale"):
-        # Tirage aléatoire entre les 2 équipes gagnantes (ordre au hasard)
+        # Tirage aléatoire entre les deux gagnants des demis (juste l'ordre)
         random.shuffle(gagnants_demis)
         st.session_state.phases_finales["finale"] = [(gagnants_demis[0], gagnants_demis[1])]
         st.rerun()
