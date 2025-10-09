@@ -31,11 +31,12 @@ st.markdown("""
 }
 .small-table thead th {
     text-align: center !important;
-    padding: 6px 10px !important;
+    padding: 4px 6px !important;
+    font-size: 0.9rem !important;
 }
 .small-table tbody td {
-    padding: 4px 8px !important;
-    font-size: 0.9rem !important;
+    padding: 2px 4px !important;
+    font-size: 0.85rem !important;
     text-align: center !important;
 }
 </style>
@@ -197,14 +198,11 @@ def afficher_classement():
     
     df_display = df[["Rang", "Joueur", "Sexe", "Points", "Jeux", "Matchs"]].copy()
     
-    # Correction : Forcer le formatage de la colonne 'Points' en chaîne de caractères
+    # Format Points to one decimal place
     df_display.loc[:, "Points"] = df_display["Points"].map('{:.1f}'.format)
     
-    # Le styler n'est plus utilisé que pour le CSS et pour cacher l'index
     styler = df_display.style.set_table_attributes('class="small-table"').hide(axis="index")
-
     st.write(styler.to_html(), unsafe_allow_html=True)
-
 
 def afficher_top8():
     """Affiche les Top 8 par sexe dans des tableaux compacts"""
@@ -218,7 +216,7 @@ def afficher_top8():
     topH = df[df["Sexe"] == "H"].head(8)[["Joueur", "Points", "Jeux", "Matchs"]].copy()
     topF = df[df["Sexe"] == "F"].head(8)[["Joueur", "Points", "Jeux", "Matchs"]].copy()
 
-    # Correction : Forcer le formatage ici aussi
+    # Format Points to one decimal place
     topH.loc[:, "Points"] = topH["Points"].map('{:.1f}'.format)
     topF.loc[:, "Points"] = topF["Points"].map('{:.1f}'.format)
 
@@ -231,7 +229,6 @@ def afficher_top8():
         st.subheader("🏅 Top 8 Femmes")
         stylerF = topF.style.set_table_attributes('class="small-table"').hide(axis="index")
         st.write(stylerF.to_html(), unsafe_allow_html=True)
-
 
 # --- PHASES FINALES ---
 def generer_quarts():
@@ -264,7 +261,6 @@ def generer_quarts():
     st.write("Équipes têtes de série qualifiées :")
     for i, equipe in enumerate(equipes, 1):
         st.write(f"T{i}: {equipe[0]} & {equipe[1]}")
-
 
     # 7. Créer les matchs des quarts de finale selon le tableau T1-T8, T2-T7, etc.
     quarts = [
@@ -371,7 +367,6 @@ if st.session_state.classement_calcule or any(j["Matchs"] > 0 for j in st.sessio
     st.markdown("---")
     st.header("🏆 Top 8 Qualifiés pour les phases finales")
     afficher_top8()
-
 
 # --- Section des phases finales ---
 st.markdown("---")
