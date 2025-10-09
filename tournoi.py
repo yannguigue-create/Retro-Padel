@@ -195,12 +195,13 @@ def afficher_classement():
     df = df.sort_values(by=["Points", "Jeux"], ascending=False).reset_index(drop=True)
     df.insert(0, "Rang", df.index + 1)
     
-    df_display = df[["Rang", "Joueur", "Sexe", "Points", "Jeux", "Matchs"]]
+    df_display = df[["Rang", "Joueur", "Sexe", "Points", "Jeux", "Matchs"]].copy()
     
-    # Utilisation du Styler de Pandas pour un formatage propre et l'application de la classe CSS
-    styler = df_display.style.format({"Points": "{:.1f}"})
-    styler.set_table_attributes('class="small-table"')
-    styler.hide(axis="index") # Cache l'index du DataFrame
+    # Correction : Forcer le formatage de la colonne 'Points' en chaîne de caractères
+    df_display.loc[:, "Points"] = df_display["Points"].map('{:.1f}'.format)
+    
+    # Le styler n'est plus utilisé que pour le CSS et pour cacher l'index
+    styler = df_display.style.set_table_attributes('class="small-table"').hide(axis="index")
 
     st.write(styler.to_html(), unsafe_allow_html=True)
 
@@ -214,17 +215,21 @@ def afficher_top8():
     df.rename(columns={"index": "Joueur"}, inplace=True)
     df = df.sort_values(by=["Points", "Jeux"], ascending=False)
     
-    topH = df[df["Sexe"] == "H"].head(8)[["Joueur", "Points", "Jeux", "Matchs"]]
-    topF = df[df["Sexe"] == "F"].head(8)[["Joueur", "Points", "Jeux", "Matchs"]]
+    topH = df[df["Sexe"] == "H"].head(8)[["Joueur", "Points", "Jeux", "Matchs"]].copy()
+    topF = df[df["Sexe"] == "F"].head(8)[["Joueur", "Points", "Jeux", "Matchs"]].copy()
+
+    # Correction : Forcer le formatage ici aussi
+    topH.loc[:, "Points"] = topH["Points"].map('{:.1f}'.format)
+    topF.loc[:, "Points"] = topF["Points"].map('{:.1f}'.format)
 
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("🥇 Top 8 Hommes")
-        stylerH = topH.style.format({"Points": "{:.1f}"}).set_table_attributes('class="small-table"').hide(axis="index")
+        stylerH = topH.style.set_table_attributes('class="small-table"').hide(axis="index")
         st.write(stylerH.to_html(), unsafe_allow_html=True)
     with c2:
         st.subheader("🏅 Top 8 Femmes")
-        stylerF = topF.style.format({"Points": "{:.1f}"}).set_table_attributes('class="small-table"').hide(axis="index")
+        stylerF = topF.style.set_table_attributes('class="small-table"').hide(axis="index")
         st.write(stylerF.to_html(), unsafe_allow_html=True)
 
 
