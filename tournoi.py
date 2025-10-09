@@ -13,57 +13,35 @@ if "phases_finales" not in st.session_state:
     st.session_state.phases_finales = {"quarts": [], "demis": [], "finale": [], "vainqueur": None}
 if "classement_calcule" not in st.session_state:
     st.session_state.classement_calcule = False
-if "hommes_list" not in st.session_state:
-    st.session_state.hommes_list = ""
-if "femmes_list" not in st.session_state:
-    st.session_state.femmes_list = ""
 
 # --- Sidebar Paramètres ---
 st.sidebar.header("⚙️ Paramètres du tournoi")
 
-# Zones de texte avec callback pour mise à jour en temps réel
-hommes_input = st.sidebar.text_area(
-    "Liste des hommes (un par ligne)", 
-    height=150, 
-    key="hommes_input",
-    value=st.session_state.hommes_list
-)
-
-femmes_input = st.sidebar.text_area(
-    "Liste des femmes (un par ligne)", 
-    height=150, 
-    key="femmes_input",
-    value=st.session_state.femmes_list
-)
-
-# Mise à jour des listes
-st.session_state.hommes_list = hommes_input
-st.session_state.femmes_list = femmes_input
+hommes_input = st.sidebar.text_area("Liste des hommes (un par ligne)", height=150)
+femmes_input = st.sidebar.text_area("Liste des femmes (un par ligne)", height=150)
 
 # Nettoyage des noms
 hommes = [h.strip() for h in hommes_input.splitlines() if h.strip()]
 femmes = [f.strip() for f in femmes_input.splitlines() if f.strip()]
 
-# Compteurs en temps réel avec style
+# Compteurs en temps réel
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"<h3 style='color: #1f77b4;'>👨 Hommes : {len(hommes)}</h3>", unsafe_allow_html=True)
 st.sidebar.markdown(f"<h3 style='color: #ff69b4;'>👩 Femmes : {len(femmes)}</h3>", unsafe_allow_html=True)
 st.sidebar.markdown(f"<h3 style='color: #2ca02c;'>🎯 Total : {len(hommes) + len(femmes)}</h3>", unsafe_allow_html=True)
+st.sidebar.markdown("---")
+
+nb_terrains = st.sidebar.number_input("Nombre de terrains disponibles", 1, 10, 2)
+max_matchs = st.sidebar.number_input("Nombre maximum de matchs par joueur", 1, 20, 4)
 
 st.sidebar.markdown("---")
 
-nb_terrains = st.sidebar.number_input("Nombre de terrains disponibles", 1, 10, 2, key="nb_terrains")
-max_matchs = st.sidebar.number_input("Nombre maximum de matchs par joueur", 1, 20, 4, key="max_matchs")
-
-st.sidebar.markdown("---")
-
-if st.sidebar.button("🔄 Reset Tournoi Complet", type="primary"):
+if st.sidebar.button("🔄 Reset Tournoi Complet"):
     st.session_state.joueurs = {}
     st.session_state.matchs = []
     st.session_state.scores = {}
     st.session_state.phases_finales = {"quarts": [], "demis": [], "finale": [], "vainqueur": None}
     st.session_state.classement_calcule = False
-    st.success("✅ Tournoi réinitialisé")
     st.rerun()
 
 # --- Initialisation et mise à jour des joueurs ---
@@ -82,72 +60,6 @@ for h in hommes:
 for f in femmes:
     if f not in st.session_state.joueurs:
         st.session_state.joueurs[f] = {"Points": 0.0, "Jeux": 0, "Matchs": 0, "Sexe": "F"}
-
-# --- Génération d'un round avec répartition équitable ---
-def generer_round():
-    # Récupérer le nombre de terrains depuis session_state
-    nb_terrains_dispo = st.session_state.get("nb_terrains", 2)
-    max_matchs_joueur = st.session_state.get("max_matchs", 4)
-    
-    # Calculer le nombre actuel de matchs pour chaque joueur
-    maj_classement()
-    
-    # Trouver le minimum de matchs joués
-    if st.session_state.joueurs:
-        min_matchs = min(j["Matchs"] for j in st.session_state.joueurs.values())
-    else:
-        return False, 0
-    
-    # PRIORITÉ AUX JOUEURS AVEC LE MOINS DE MATCHS
-    # Ne prendre QUE les joueurs qui ont le minimum de matchs OU minimum+1
-    joueurs_prioritaires = []
-    for j_name, j_data in st.session_state.joueurs.items():
-        if j_data["Matchs"] <= min_matchs + 1 and j_data["Matchs"] < max_matchs_joueur:
-            joueurs_prioritaires.append(j_name)
-    
-    hommes_dispo = [j for j in joueurs_prioritaires if st.session_state.joueurs[j]["Sexe"] == "H"]
-    femmes_dispo = [j for j in joueurs_prioritaires if st.session_state.joueurs[j]["Sexe"] == "F"]
-    
-    # Si pas assez de joueurs prioritaires, prendre tous les joueurs disponibles
-    if len(hommes_dispo) < 2 or len(femmes_dispo) < 2:
-        hommes_dispo = [j for j in st.session_state.joueurs.keys() 
-                       if st.session_state.joueurs[j]["Sexe"] == "H" 
-                       and st.session_state.joueurs[j]["Matchs"] < max_matchs_joueur]
-        femmes_dispo = [j for j in st.session_state.joueurs.keys() 
-                       if st.session_state.joueurs[j]["Sexe"] == "F" 
-                       and st.session_state.joueurs[j]["Matchs"] < max_matchs_joueur]
-    
-    # Trier par nombre de matchs (les joueurs avec le moins de matchs en premier)
-    hommes_dispo.sort(key=lambda x: st.session_state.joueurs[x]["Matchs"])
-    femmes_dispo.sort(key=lambda x: st.session_state.joueurs[x]["Matchs"])
-    
-    # Mélanger aléatoirement parmi ceux qui ont le même nombre de matchs
-    random.shuffle(hommes_dispo)
-    random.shuffle(femmes_dispo)
-
-    matchs = []
-    # Calculer le nombre EXACT de terrains à utiliser
-    terrains_possibles = min(
-        nb_terrains_dispo,
-        len(hommes_dispo) // 2,
-        len(femmes_dispo) // 2
-    )
-    
-    # Créer exactement terrains_possibles matchs
-    for i in range(terrains_possibles):
-        if len(hommes_dispo) >= 2 and len(femmes_dispo) >= 2:
-            h1 = hommes_dispo.pop(0)
-            h2 = hommes_dispo.pop(0)
-            f1 = femmes_dispo.pop(0)
-            f2 = femmes_dispo.pop(0)
-            equipe1 = [h1, f1]
-            equipe2 = [h2, f2]
-            matchs.append((equipe1, equipe2))
-
-    if matchs:
-        st.session_state.matchs.append(matchs)
-        return True, len(matchs)
-    return False, 0
 
 # --- Mise à jour classement ---
 def maj_classement():
@@ -192,6 +104,73 @@ def maj_classement():
                     st.session_state.joueurs[j]["Jeux"] += js_perdants
                     st.session_state.joueurs[j]["Matchs"] += 1
 
+# --- Génération d'un round avec répartition équitable ---
+def generer_round():
+    # Mettre à jour les stats
+    maj_classement()
+    
+    # Trouver le minimum de matchs joués
+    if st.session_state.joueurs:
+        min_matchs = min(j["Matchs"] for j in st.session_state.joueurs.values())
+    else:
+        return False, 0
+    
+    # PRIORITÉ AUX JOUEURS AVEC LE MOINS DE MATCHS
+    joueurs_prioritaires = []
+    for j_name, j_data in st.session_state.joueurs.items():
+        if j_data["Matchs"] == min_matchs and j_data["Matchs"] < max_matchs:
+            joueurs_prioritaires.append(j_name)
+    
+    # Si pas assez de joueurs avec le minimum, prendre aussi ceux avec min+1
+    hommes_dispo = [j for j in joueurs_prioritaires if st.session_state.joueurs[j]["Sexe"] == "H"]
+    femmes_dispo = [j for j in joueurs_prioritaires if st.session_state.joueurs[j]["Sexe"] == "F"]
+    
+    if len(hommes_dispo) < 2 or len(femmes_dispo) < 2:
+        # Prendre tous les joueurs disponibles
+        joueurs_prioritaires = [j for j, d in st.session_state.joueurs.items() if d["Matchs"] < max_matchs]
+        hommes_dispo = [j for j in joueurs_prioritaires if st.session_state.joueurs[j]["Sexe"] == "H"]
+        femmes_dispo = [j for j in joueurs_prioritaires if st.session_state.joueurs[j]["Sexe"] == "F"]
+    
+    # Trier par nombre de matchs
+    hommes_dispo.sort(key=lambda x: st.session_state.joueurs[x]["Matchs"])
+    femmes_dispo.sort(key=lambda x: st.session_state.joueurs[x]["Matchs"])
+    
+    # Mélanger aléatoirement
+    random.shuffle(hommes_dispo)
+    random.shuffle(femmes_dispo)
+
+    matchs = []
+    terrains_possibles = min(nb_terrains, len(hommes_dispo) // 2, len(femmes_dispo) // 2)
+    
+    for i in range(terrains_possibles):
+        if len(hommes_dispo) >= 2 and len(femmes_dispo) >= 2:
+            h1 = hommes_dispo.pop(0)
+            h2 = hommes_dispo.pop(0)
+            f1 = femmes_dispo.pop(0)
+            f2 = femmes_dispo.pop(0)
+            equipe1 = [h1, f1]
+            equipe2 = [h2, f2]
+            matchs.append((equipe1, equipe2))
+
+    if matchs:
+        st.session_state.matchs.append(matchs)
+        return True, len(matchs)
+    return False, 0
+
+# --- Génération automatique de tous les rounds ---
+def generer_tous_rounds():
+    rounds_generes = 0
+    max_iterations = 100  # Sécurité pour éviter boucle infinie
+    
+    for _ in range(max_iterations):
+        success, nb_matchs = generer_round()
+        if success:
+            rounds_generes += 1
+        else:
+            break
+    
+    return rounds_generes
+
 # --- Affichage du classement ---
 def afficher_classement():
     if not st.session_state.joueurs:
@@ -210,10 +189,8 @@ def afficher_classement():
 
 # --- PHASES FINALES ---
 def generer_quarts():
-    # Mettre à jour le classement avant de générer les quarts
     maj_classement()
     
-    # Trier les joueurs par points puis jeux
     joueurs_trie = sorted(
         st.session_state.joueurs.items(),
         key=lambda x: (x[1]["Points"], x[1]["Jeux"]), 
@@ -224,10 +201,8 @@ def generer_quarts():
         st.error(f"❌ Il faut au moins 8 joueurs pour les phases finales (actuellement : {len(joueurs_trie)})")
         return False
     
-    # Prendre les 8 premiers
     top8 = [j[0] for j in joueurs_trie[:8]]
     
-    # Séparer hommes et femmes
     hommes_qualifies = [j for j in top8 if st.session_state.joueurs[j]["Sexe"] == "H"]
     femmes_qualifies = [j for j in top8 if st.session_state.joueurs[j]["Sexe"] == "F"]
     
@@ -239,7 +214,6 @@ def generer_quarts():
         st.error(f"❌ Il faut au moins 4 femmes dans le top 8 (actuellement : {len(femmes_qualifies)})")
         return False
     
-    # Tirage aléatoire pour créer 4 matchs équilibrés
     random.shuffle(hommes_qualifies)
     random.shuffle(femmes_qualifies)
     
@@ -247,15 +221,16 @@ def generer_quarts():
     for i in range(4):
         h1 = hommes_qualifies[i]
         f1 = femmes_qualifies[i]
-        h2 = hommes_qualifies[(i+4) % 8] if (i+4) < len(hommes_qualifies) else hommes_qualifies[i % len(hommes_qualifies)]
-        f2 = femmes_qualifies[(i+4) % 8] if (i+4) < len(femmes_qualifies) else femmes_qualifies[i % len(femmes_qualifies)]
+        h2_idx = (i + 4) % len(hommes_qualifies)
+        f2_idx = (i + 4) % len(femmes_qualifies)
+        h2 = hommes_qualifies[h2_idx]
+        f2 = femmes_qualifies[f2_idx]
         quarts.append(([h1, f1], [h2, f2]))
     
     st.session_state.phases_finales["quarts"] = quarts[:4]
     return True
 
 def generer_demis_aleatoires():
-    """Génère des demi-finales aléatoires avec 1H+1F par équipe"""
     tous_joueurs = list(st.session_state.joueurs.keys())
     hommes_dispo = [j for j in tous_joueurs if st.session_state.joueurs[j]["Sexe"] == "H"]
     femmes_dispo = [j for j in tous_joueurs if st.session_state.joueurs[j]["Sexe"] == "F"]
@@ -277,7 +252,6 @@ def generer_demis_aleatoires():
     return True
 
 def generer_finale_aleatoire():
-    """Génère une finale aléatoire avec 1H+1F par équipe"""
     tous_joueurs = list(st.session_state.joueurs.keys())
     hommes_dispo = [j for j in tous_joueurs if st.session_state.joueurs[j]["Sexe"] == "H"]
     femmes_dispo = [j for j in tous_joueurs if st.session_state.joueurs[j]["Sexe"] == "F"]
@@ -303,16 +277,14 @@ st.title("🎾 Tournoi de Padel - Rétro Padel")
 if len(hommes) < 2 or len(femmes) < 2:
     st.warning("⚠️ Il faut au moins 2 hommes et 2 femmes pour générer un round")
 else:
-    # Mettre à jour le classement pour avoir les stats actuelles
     maj_classement()
     
-    # Vérifier combien de joueurs peuvent encore jouer
     hommes_disponibles = sum(1 for j in st.session_state.joueurs.items() if j[1]["Sexe"] == "H" and j[1]["Matchs"] < max_matchs)
     femmes_disponibles = sum(1 for j in st.session_state.joueurs.items() if j[1]["Sexe"] == "F" and j[1]["Matchs"] < max_matchs)
     
     terrains_theoriques = min(nb_terrains, hommes_disponibles // 2, femmes_disponibles // 2)
     
-    # Afficher les statistiques de matchs
+    # Afficher les statistiques
     if st.session_state.joueurs:
         matchs_counts = [j["Matchs"] for j in st.session_state.joueurs.values()]
         min_matchs = min(matchs_counts) if matchs_counts else 0
@@ -320,28 +292,23 @@ else:
         st.info(f"📊 Matchs par joueur : Min = {min_matchs}, Max = {max_matchs_joues}, Limite = {max_matchs}")
     
     if hommes_disponibles >= 2 and femmes_disponibles >= 2:
-        col1, col2, col3 = st.columns([2, 1, 1])
+        st.info(f"ℹ️ Vous pouvez générer jusqu'à {terrains_theoriques} match(s) par round avec {nb_terrains} terrain(s)")
+        
+        col1, col2 = st.columns(2)
         with col1:
-            st.info(f"ℹ️ Vous pouvez générer {terrains_theoriques} match(s) avec {nb_terrains} terrain(s) disponible(s)")
-        with col2:
-            if st.button("⚡ Générer 1 round", type="primary"):
+            if st.button("⚡ Générer 1 round", type="primary", use_container_width=True):
                 success, nb_matchs = generer_round()
                 if success:
                     st.success(f"✅ Round {len(st.session_state.matchs)} généré avec {nb_matchs} match(s)!")
                     st.rerun()
                 else:
-                    st.error("❌ Impossible de générer un nouveau round")
-        with col3:
-            if st.button("🚀 Générer TOUS les rounds", type="secondary"):
-                rounds_generes = 0
-                while True:
-                    success, nb_matchs = generer_round()
-                    if success:
-                        rounds_generes += 1
-                    else:
-                        break
-                if rounds_generes > 0:
-                    st.success(f"✅ {rounds_generes} round(s) générés automatiquement!")
+                    st.error("❌ Impossible de générer un round")
+        
+        with col2:
+            if st.button("🚀 Générer TOUS les rounds", type="secondary", use_container_width=True):
+                nb_rounds = generer_tous_rounds()
+                if nb_rounds > 0:
+                    st.success(f"✅ {nb_rounds} round(s) générés automatiquement!")
                     st.rerun()
                 else:
                     st.warning("⚠️ Aucun round supplémentaire possible")
@@ -350,18 +317,20 @@ else:
 
 # Affichage des rounds
 if st.session_state.matchs:
+    st.markdown("---")
     st.header("📋 Matchs du tournoi")
+    
     for r, matchs in enumerate(st.session_state.matchs, 1):
-        st.subheader(f"🏆 Round {r}")
-        for idx, (e1, e2) in enumerate(matchs):
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.write(f"**Terrain {idx+1}:** {e1[0]} (H) + {e1[1]} (F)  🆚  {e2[0]} (H) + {e2[1]} (F)")
-            with col2:
-                score_key = f"score_{r}_{idx}"
-                score = st.text_input("Score (ex: 6-4)", key=score_key, label_visibility="collapsed")
-                if score:
-                    st.session_state.scores[score_key] = score
+        with st.expander(f"🏆 Round {r} - {len(matchs)} match(s)", expanded=(r == len(st.session_state.matchs))):
+            for idx, (e1, e2) in enumerate(matchs):
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"**Terrain {idx+1}:** {e1[0]} (H) + {e1[1]} (F)  🆚  {e2[0]} (H) + {e2[1]} (F)")
+                with col2:
+                    score_key = f"score_{r}_{idx}"
+                    score = st.text_input("Score (ex: 6-4)", key=score_key, label_visibility="collapsed")
+                    if score:
+                        st.session_state.scores[score_key] = score
 
     st.markdown("---")
     if st.button("📊 Calculer le classement", type="primary"):
@@ -379,29 +348,30 @@ if st.session_state.classement_calcule or any(st.session_state.joueurs[j]["Match
 st.markdown("---")
 st.header("🏆 Phases Finales")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
-    if st.button("⚡ Générer Quarts (Top 8)", type="primary"):
+    if st.button("⚡ Quarts (Top 8)", use_container_width=True):
         if generer_quarts():
-            st.success("✅ Quarts de finale générés!")
+            st.success("✅ Quarts générés!")
             st.rerun()
 
 with col2:
-    if st.button("🎲 Demi-finales aléatoires", type="secondary"):
+    if st.button("🎲 Demis aléatoires", use_container_width=True):
         if generer_demis_aleatoires():
-            st.success("✅ Demi-finales aléatoires générées!")
+            st.success("✅ Demis générées!")
             st.rerun()
 
 with col3:
-    if st.button("🎲 Finale aléatoire", type="secondary"):
+    if st.button("🎲 Finale aléatoire", use_container_width=True):
         if generer_finale_aleatoire():
-            st.success("✅ Finale aléatoire générée!")
+            st.success("✅ Finale générée!")
             st.rerun()
 
-if st.button("♻️ Reset Phases Finales"):
-    st.session_state.phases_finales = {"quarts": [], "demis": [], "finale": [], "vainqueur": None}
-    st.success("✅ Phases finales réinitialisées")
-    st.rerun()
+with col4:
+    if st.button("♻️ Reset Phases", use_container_width=True):
+        st.session_state.phases_finales = {"quarts": [], "demis": [], "finale": [], "vainqueur": None}
+        st.success("✅ Reset!")
+        st.rerun()
 
 # Quarts de finale
 if st.session_state.phases_finales["quarts"]:
