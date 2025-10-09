@@ -8,6 +8,74 @@ import pandas as pd
 # =========================
 st.set_page_config(page_title="🎾 Tournoi de Padel", page_icon="🎾", layout="wide")
 
+# ---- COMPACT UI (présentation uniquement) ----
+COMPACT_CSS = """
+<style>
+/* Conteneur principal plus dense et largeur maîtrisée */
+div.block-container{
+  padding-top:0.6rem;
+  padding-bottom:0.6rem;
+  padding-left:1rem;
+  padding-right:1rem;
+  max-width: 1100px; /* limite la largeur pour éviter l'étalement sur grands écrans */
+}
+
+/* Titres plus serrés */
+h1,h2,h3,h4{
+  margin-top:0.6rem;
+  margin-bottom:0.45rem;
+}
+
+/* Séparateurs plus discrets */
+hr{ margin:0.5rem 0; }
+
+/* Expandeurs : en-tête et contenu plus compacts */
+div[data-testid="stExpander"] details summary{
+  padding:0.25rem 0.5rem !important;
+  font-size:0.95rem !important;
+}
+div[data-testid="stExpander"] div[role="region"]{
+  padding:0.45rem 0.6rem !important;
+}
+
+/* Boutons plus compacts */
+.stButton>button{
+  padding:0.25rem 0.6rem !important;
+  font-size:0.92rem !important;
+}
+
+/* Champs de saisie plus compacts (hauteur/padding) */
+div[data-baseweb="input"] input{
+  padding:0.25rem 0.45rem !important;
+  min-height:1.8rem !important;
+  font-size:0.92rem !important;
+}
+
+/* Champs de score dans la zone principale : largeur réduite pour éviter les colonnes trop larges */
+section.main div[data-baseweb="input"],
+div[data-testid="stAppViewContainer"] div[data-baseweb="input"]{
+  max-width:110px;
+}
+
+/* Tables plus denses */
+div[data-testid="stTable"] table{
+  font-size:0.92rem !important;
+}
+div[data-testid="stTable"] th, 
+div[data-testid="stTable"] td{
+  padding:0.18rem 0.45rem !important;
+  white-space:nowrap;
+}
+
+/* Marges verticales entre blocs un peu réduites */
+section.main .element-container{
+  margin-bottom:0.6rem;
+}
+</style>
+"""
+st.markdown(COMPACT_CSS, unsafe_allow_html=True)
+# ---- FIN COMPACT UI ----
+
 if "joueurs" not in st.session_state:
     st.session_state.joueurs = {}
 if "matchs" not in st.session_state:
@@ -215,47 +283,25 @@ def generer_quarts():
     return True
 
 def _pairs_from_quarts(quarts):
-    """Renvoie :
-       - winners_H, winners_F : listes H et F des vainqueurs
-       - forbidden_pairs : set de paires (H,F) correspondant aux duos des vainqueurs en quart
-    """
     winners_H, winners_F = [], []
     forbidden_pairs = set()
     for (e1, e2) in quarts:
-        sc_key = f"quart_score_{len(forbidden_pairs)}"  # pas utilisé ici, on lit depuis UI
-    # la lecture des scores/choix winners se fait en UI, cette fonction est utilitaire seulement
+        sc_key = f"quart_score_{len(forbidden_pairs)}"
     return winners_H, winners_F, forbidden_pairs
 
 def _tirage_semis_recompose(winners_teams, quarts):
-    """Recompose aléatoirement 4 gagnants en 4 duos H+F,
-       en **interdisant** les mêmes duos (H,F) qu'en quarts.
-       winners_teams = liste de 4 équipes gagnantes [[H,F], [H,F], ...]
-       quarts = liste des 4 matchs de quarts ([[H,F],[H,F]], ...)
-
-       Retourne deux matches de demi-finale : [([H,F],[H,F]), ([H,F],[H,F])]
-    """
-    # paires interdites = duos H-F utilisés par les équipes gagnantes des quarts
     forbidden = set()
-    for teamA, teamB in quarts:
-        # on ne sait pas ici quel team a gagné ; l'appelant sait quels winners sont retenus.
-        pass
-    # mais on prendra directement les paires interdites à partir des winners_teams (leurs duos initiaux)
     for (h, f) in winners_teams:
         forbidden.add((h, f))
-
     H = [team[0] for team in winners_teams]
     F = [team[1] for team in winners_teams]
-
-    # Tirage aléatoire jusqu'à obtenir des duos H-F qui ne sont pas dans forbidden
     for _ in range(2000):
         random.shuffle(H)
         random.shuffle(F)
-        pairs = list(zip(H, F))  # quatre duos
+        pairs = list(zip(H, F))
         if all((h, f) not in forbidden for (h, f) in pairs):
-            # on a 4 nouvelles équipes ; on fabrique 2 demis au hasard
             random.shuffle(pairs)
             return [(pairs[0], pairs[1]), (pairs[2], pairs[3])]
-    # fallback si impossible
     random.shuffle(H); random.shuffle(F)
     pairs = list(zip(H, F))
     random.shuffle(pairs)
@@ -363,13 +409,9 @@ if st.session_state.phases_finales["quarts"]:
 
     # Tirage des demis : RECOMPOSITION des équipes (nouveaux duos H+F)
     if len(gagnants_quarts) == 4 and st.button("➡️ Valider & Tirage aléatoire des Demi-finales"):
-        # recomposer : 4 gagnants => on sépare H et F, et on interdit les mêmes duos qu’en quarts
-        # forbidden = duos (H,F) des 4 gagnants (leurs partenaires de quart)
         forbidden = set((team[0], team[1]) for team in gagnants_quarts)
         H = [t[0] for t in gagnants_quarts]
         F = [t[1] for t in gagnants_quarts]
-
-        # tirage jusqu'à éviter toute paire interdite
         ok = False
         for _ in range(2000):
             random.shuffle(H)
@@ -379,9 +421,7 @@ if st.session_state.phases_finales["quarts"]:
                 ok = True
                 break
         if not ok:
-            # fallback si introuvable
             new_pairs = list(zip(H, F))
-
         random.shuffle(new_pairs)
         st.session_state.phases_finales["demis"] = [
             (list(new_pairs[0]), list(new_pairs[1])),
@@ -407,7 +447,7 @@ if st.session_state.phases_finales["demis"]:
                     pass
 
     if len(gagnants_demis) == 2 and st.button("➡️ Valider & Tirage de la Finale"):
-        random.shuffle(gagnants_demis)  # ordre aléatoire
+        random.shuffle(gagnants_demis)
         st.session_state.phases_finales["finale"] = [(gagnants_demis[0], gagnants_demis[1])]
         st.rerun()
 
