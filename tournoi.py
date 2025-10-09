@@ -90,14 +90,16 @@ def maj_classement():
             else:
                 gagnants, perdants, js_gagnants, js_perdants = equipe2, equipe1, s2, s1
 
+            # GAGNANTS : 3 + 0.1 * jeux gagnés
             for j in gagnants:
                 if j in st.session_state.joueurs:
                     st.session_state.joueurs[j]["Points"] += 3.0 + js_gagnants * 0.1
                     st.session_state.joueurs[j]["Jeux"] += js_gagnants
                     st.session_state.joueurs[j]["Matchs"] += 1
+            # PERDANTS : 0.5 point fixe (pas lié aux jeux)
             for j in perdants:
                 if j in st.session_state.joueurs:
-                    st.session_state.joueurs[j]["Points"] += js_perdants * 0.1
+                    st.session_state.joueurs[j]["Points"] += 0.5
                     st.session_state.joueurs[j]["Jeux"] += js_perdants
                     st.session_state.joueurs[j]["Matchs"] += 1
 
@@ -110,7 +112,6 @@ def generer_round():
     hommes_dispo = [j for j in eligibles if st.session_state.joueurs[j]["Sexe"] == "H"]
     femmes_dispo = [j for j in eligibles if st.session_state.joueurs[j]["Sexe"] == "F"]
 
-    # tri par nombre planifié + aléa pour départager
     rnd = random.random
     hommes_dispo.sort(key=lambda x: (counts[x], rnd()))
     femmes_dispo.sort(key=lambda x: (counts[x], rnd()))
@@ -125,16 +126,13 @@ def generer_round():
             f1 = femmes_dispo.pop(0)
             f2 = femmes_dispo.pop(0)
 
-            # dernier garde-fou sur le plafond
-            if max(counts[h1], counts[h2], counts[f1], counts[f2]) >= max_matchs:
+            if max(scheduled_counts().get(h1,0),
+                   scheduled_counts().get(h2,0),
+                   scheduled_counts().get(f1,0),
+                   scheduled_counts().get(f2,0)) >= max_matchs:
                 continue
 
             matchs.append(([h1, f1], [h2, f2]))
-            counts[h1] += 1; counts[h2] += 1; counts[f1] += 1; counts[f2] += 1
-
-            # re-tri pour garder la priorité à ceux qui restent les moins planifiés
-            hommes_dispo.sort(key=lambda x: (counts[x], rnd()))
-            femmes_dispo.sort(key=lambda x: (counts[x], rnd()))
 
     if matchs:
         st.session_state.matchs.append(matchs)
@@ -153,31 +151,29 @@ def generer_tous_rounds():
     return rounds_generes
 
 # ---------- Affichage du classement ----------
+def _df_classement():
+    df = pd.DataFrame.from_dict(st.session_state.joueurs, orient="index").reset_index()
+    df = df.rename(columns={"index": "Joueur"})
+    # Affichage sans virgule : on arrondit à 0 décimale
+    df["Points"] = df["Points"].round(0).astype(int)
+    df["Jeux"] = df["Jeux"].astype(int)
+    df["Matchs"] = df["Matchs"].astype(int)
+    df = df.sort_values(by=["Points", "Jeux"], ascending=False).reset_index(drop=True)
+    return df
+
 def afficher_classement():
     if not st.session_state.joueurs:
         st.warning("Aucun joueur enregistré")
         return
-    
-    df = pd.DataFrame.from_dict(st.session_state.joueurs, orient="index")
-    df = df.reset_index().rename(columns={"index": "Joueur"})
-    df["Points"] = df["Points"].round(1)
-    df["Jeux"] = df["Jeux"].astype(int)
-    df["Matchs"] = df["Matchs"].astype(int)
-    df = df.sort_values(by=["Points", "Jeux"], ascending=False).reset_index(drop=True)
+    df = _df_classement()
     df.insert(0, "Rang", df.index + 1)
-    df = df[["Rang", "Joueur", "Sexe", "Points", "Jeux", "Matchs"]]
-    st.table(df)
+    st.table(df[["Rang", "Joueur", "Sexe", "Points", "Jeux", "Matchs"]])
 
 # ---------- Top 8 H / Top 8 F (toujours visibles) ----------
 def afficher_top8():
     if not st.session_state.joueurs:
         return
-    df = pd.DataFrame.from_dict(st.session_state.joueurs, orient="index").reset_index()
-    df = df.rename(columns={"index": "Joueur"})
-    df["Points"] = df["Points"].round(1)
-    # tri global pour classement
-    df = df.sort_values(by=["Points", "Jeux"], ascending=False)
-
+    df = _df_classement()
     topH = df[df["Sexe"] == "H"].head(8)[["Joueur", "Points", "Jeux", "Matchs"]].reset_index(drop=True)
     topF = df[df["Sexe"] == "F"].head(8)[["Joueur", "Points", "Jeux", "Matchs"]].reset_index(drop=True)
 
@@ -189,36 +185,31 @@ def afficher_top8():
         st.subheader("🏅 Top 8 Femmes")
         st.dataframe(topF, use_container_width=True)
 
-# ---------- Phases finales (inchangées) ----------
+# ---------- Phases finales ----------
 def generer_quarts():
+    """8 meilleurs hommes + 8 meilleures femmes, tirage aléatoire H+F vs H+F."""
     maj_classement()
-    joueurs_trie = sorted(
-        st.session_state.joueurs.items(),
-        key=lambda x: (x[1]["Points"], x[1]["Jeux"]), 
-        reverse=True
-    )
-    if len(joueurs_trie) < 8:
-        st.error(f"❌ Il faut au moins 8 joueurs pour les phases finales (actuellement : {len(joueurs_trie)})")
+    df = _df_classement()
+    hommes_qualifies = df[df["Sexe"] == "H"]["Joueur"].tolist()[:8]
+    femmes_qualifies = df[df["Sexe"] == "F"]["Joueur"].tolist()[:8]
+
+    if len(hommes_qualifies) < 8:
+        st.error(f"❌ Il faut au moins 8 hommes qualifiés (actuellement : {len(hommes_qualifies)})")
         return False
-    top8 = [j[0] for j in joueurs_trie[:8]]
-    hommes_qualifies = [j for j in top8 if st.session_state.joueurs[j]["Sexe"] == "H"]
-    femmes_qualifies = [j for j in top8 if st.session_state.joueurs[j]["Sexe"] == "F"]
-    if len(hommes_qualifies) < 4:
-        st.error(f"❌ Il faut au moins 4 hommes dans le top 8 (actuellement : {len(hommes_qualifies)})")
+    if len(femmes_qualifies) < 8:
+        st.error(f"❌ Il faut au moins 8 femmes qualifiées (actuellement : {len(femmes_qualifies)})")
         return False
-    if len(femmes_qualifies) < 4:
-        st.error(f"❌ Il faut au moins 4 femmes dans le top 8 (actuellement : {len(femmes_qualifies)})")
-        return False
+
     random.shuffle(hommes_qualifies)
     random.shuffle(femmes_qualifies)
+
     quarts = []
     for i in range(4):
-        h1 = hommes_qualifies[i]
-        f1 = femmes_qualifies[i]
-        h2 = hommes_qualifies[(i + 4) % len(hommes_qualifies)]
-        f2 = femmes_qualifies[(i + 4) % len(femmes_qualifies)]
+        h1, f1 = hommes_qualifies[i], femmes_qualifies[i]
+        h2, f2 = hommes_qualifies[i+4], femmes_qualifies[i+4]
         quarts.append(([h1, f1], [h2, f2]))
-    st.session_state.phases_finales["quarts"] = quarts[:4]
+
+    st.session_state.phases_finales["quarts"] = quarts
     return True
 
 def generer_demis_aleatoires():
@@ -229,11 +220,10 @@ def generer_demis_aleatoires():
         st.error("❌ Il faut au moins 4 hommes et 4 femmes pour les demi-finales")
         return False
     random.shuffle(H); random.shuffle(F)
-    demis = [
+    st.session_state.phases_finales["demis"] = [
         ([H[0], F[0]], [H[1], F[1]]),
         ([H[2], F[2]], [H[3], F[3]]),
     ]
-    st.session_state.phases_finales["demis"] = demis
     st.session_state.phases_finales["quarts"] = []
     return True
 
@@ -262,12 +252,13 @@ else:
     femmes_disponibles = sum(1 for j in st.session_state.joueurs if st.session_state.joueurs[j]["Sexe"] == "F" and counts_planifie[j] < max_matchs)
     terrains_theoriques = min(nb_terrains, hommes_disponibles // 2, femmes_disponibles // 2)
 
-    # Stats
     if st.session_state.joueurs:
-        matchs_counts = [j["Matchs"] for j in st.session_state.joueurs.values()]
+        maj_classement()
+        df_now = _df_classement()
         st.info(
-            f"📊 Matchs JOUÉS : min={min(matchs_counts) if matchs_counts else 0}, "
-            f"max={max(matchs_counts) if matchs_counts else 0}, limite={max_matchs}"
+            f"📊 Matchs JOUÉS : min={df_now['Matchs'].min() if not df_now.empty else 0}, "
+            f"max={df_now['Matchs'].max() if not df_now.empty else 0}, "
+            f"limite={max_matchs}"
         )
         st.info(f"🗓️ Éligibles (PLANIFIÉS < {max_matchs}) → Hommes: {hommes_disponibles}, Femmes: {femmes_disponibles}")
 
@@ -366,13 +357,11 @@ if st.session_state.phases_finales["quarts"]:
                 except:
                     pass
     if len(gagnants_quarts) == 4 and st.button("➡️ Valider et passer aux Demi-finales"):
-        # tirage aléatoire entre gagnants pour composer les demis
         random.shuffle(gagnants_quarts)
         st.session_state.phases_finales["demis"] = [
             (gagnants_quarts[0], gagnants_quarts[1]),
             (gagnants_quarts[2], gagnants_quarts[3])
         ]
-        # on conserve l'affichage des quarts (on ne les efface pas)
         st.rerun()
 
 # Demis
@@ -392,7 +381,6 @@ if st.session_state.phases_finales["demis"]:
                 except:
                     pass
     if len(gagnants_demis) == 2 and st.button("➡️ Valider et passer à la Finale"):
-        # tirage aléatoire entre gagnants pour la finale
         random.shuffle(gagnants_demis)
         st.session_state.phases_finales["finale"] = [(gagnants_demis[0], gagnants_demis[1])]
         st.rerun()
