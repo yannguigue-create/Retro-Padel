@@ -11,65 +11,62 @@ st.set_page_config(page_title="🎾 Tournoi de Padel", page_icon="🎾", layout=
 # ---- COMPACT UI (présentation uniquement) ----
 COMPACT_CSS = """
 <style>
-/* Conteneur principal plus dense et largeur maîtrisée */
+/* Conteneur principal : largeur bornée + paddings réduits */
+[data-testid="stAppViewContainer"] .main{
+  max-width: 1050px;       /* ← régle ici (ex: 1000 / 900) si tu veux encore plus étroit */
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 0.5rem;
+  margin: 0 auto;
+}
 div.block-container{
-  padding-top:0.6rem;
-  padding-bottom:0.6rem;
-  padding-left:1rem;
-  padding-right:1rem;
-  max-width: 1100px; /* limite la largeur pour éviter l'étalement sur grands écrans */
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
 }
 
-/* Titres plus serrés */
-h1,h2,h3,h4{
-  margin-top:0.6rem;
-  margin-bottom:0.45rem;
-}
+/* Titres et marges plus serrés */
+h1,h2,h3,h4{ margin: 0.5rem 0 0.35rem 0; }
 
-/* Séparateurs plus discrets */
-hr{ margin:0.5rem 0; }
+/* Espacement vertical global plus compact */
+section.main .element-container{ margin-bottom: 0.45rem; }
 
-/* Expandeurs : en-tête et contenu plus compacts */
+/* Expandeurs (Rounds) : en-tête et contenu plus denses */
 div[data-testid="stExpander"] details summary{
-  padding:0.25rem 0.5rem !important;
-  font-size:0.95rem !important;
+  padding: 0.22rem 0.5rem !important;
+  font-size: 0.95rem !important;
+  line-height: 1.15 !important;
 }
 div[data-testid="stExpander"] div[role="region"]{
-  padding:0.45rem 0.6rem !important;
+  padding: 0.4rem 0.6rem !important;
 }
 
-/* Boutons plus compacts */
+/* Colonnes Score (text input à droite) : largeur et hauteur réduites */
+div[data-testid="stTextInput"]{ max-width: 120px; }
+div[data-testid="stTextInput"] input{
+  padding: 0.25rem 0.45rem !important;
+  min-height: 1.8rem !important;
+  font-size: 0.92rem !important;
+}
+
+/* Boutons compacts */
 .stButton>button{
-  padding:0.25rem 0.6rem !important;
-  font-size:0.92rem !important;
-}
-
-/* Champs de saisie plus compacts (hauteur/padding) */
-div[data-baseweb="input"] input{
-  padding:0.25rem 0.45rem !important;
-  min-height:1.8rem !important;
-  font-size:0.92rem !important;
-}
-
-/* Champs de score dans la zone principale : largeur réduite pour éviter les colonnes trop larges */
-section.main div[data-baseweb="input"],
-div[data-testid="stAppViewContainer"] div[data-baseweb="input"]{
-  max-width:110px;
+  padding: 0.28rem 0.6rem !important;
+  font-size: 0.92rem !important;
 }
 
 /* Tables plus denses */
-div[data-testid="stTable"] table{
-  font-size:0.92rem !important;
-}
+div[data-testid="stTable"] table{ font-size: 0.92rem !important; }
 div[data-testid="stTable"] th, 
 div[data-testid="stTable"] td{
-  padding:0.18rem 0.45rem !important;
-  white-space:nowrap;
+  padding: 0.16rem 0.42rem !important;
+  white-space: nowrap;      /* évite d’élargir les colonnes */
 }
 
-/* Marges verticales entre blocs un peu réduites */
-section.main .element-container{
-  margin-bottom:0.6rem;
+/* Légère réduction des champs number en sidebar */
+div[data-testid="stNumberInput"] input{
+  padding: 0.2rem 0.4rem !important;
+  min-height: 1.8rem !important;
+  font-size: 0.92rem !important;
 }
 </style>
 """
@@ -407,7 +404,6 @@ if st.session_state.phases_finales["quarts"]:
                 except:
                     pass
 
-    # Tirage des demis : RECOMPOSITION des équipes (nouveaux duos H+F)
     if len(gagnants_quarts) == 4 and st.button("➡️ Valider & Tirage aléatoire des Demi-finales"):
         forbidden = set((team[0], team[1]) for team in gagnants_quarts)
         H = [t[0] for t in gagnants_quarts]
