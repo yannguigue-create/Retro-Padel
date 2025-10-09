@@ -320,17 +320,31 @@ else:
         st.info(f"📊 Matchs par joueur : Min = {min_matchs}, Max = {max_matchs_joues}, Limite = {max_matchs}")
     
     if hommes_disponibles >= 2 and femmes_disponibles >= 2:
-        col1, col2 = st.columns([3, 1])
+        col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
             st.info(f"ℹ️ Vous pouvez générer {terrains_theoriques} match(s) avec {nb_terrains} terrain(s) disponible(s)")
         with col2:
-            if st.button("⚡ Générer un nouveau round", type="primary"):
+            if st.button("⚡ Générer 1 round", type="primary"):
                 success, nb_matchs = generer_round()
                 if success:
                     st.success(f"✅ Round {len(st.session_state.matchs)} généré avec {nb_matchs} match(s)!")
                     st.rerun()
                 else:
                     st.error("❌ Impossible de générer un nouveau round")
+        with col3:
+            if st.button("🚀 Générer TOUS les rounds", type="secondary"):
+                rounds_generes = 0
+                while True:
+                    success, nb_matchs = generer_round()
+                    if success:
+                        rounds_generes += 1
+                    else:
+                        break
+                if rounds_generes > 0:
+                    st.success(f"✅ {rounds_generes} round(s) générés automatiquement!")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ Aucun round supplémentaire possible")
     else:
         st.info(f"ℹ️ Tous les joueurs ont atteint le nombre maximum de matchs ({max_matchs})")
 
