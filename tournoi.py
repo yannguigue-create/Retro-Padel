@@ -2,7 +2,6 @@
 import streamlit as st
 import random
 import pandas as pd
-from itertools import combinations
 
 # =========================
 #   PAGE + CSS (compact)
@@ -14,6 +13,8 @@ st.markdown(
       .block-container {padding-top: 0.6rem; padding-bottom: 0.6rem; max-width: 1400px;}
       .stTable td, .stTable th {padding: .25rem .40rem !important;}
       .stExpander {border: 1px solid #eaeaea !important; margin-bottom: .35rem;}
+      /* élargir la colonne Joueur dans les tableaux streamlit (meilleure lisibilité) */
+      table {table-layout: auto;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -59,14 +60,17 @@ st.sidebar.markdown(f"👩 **Femmes :** {len(femmes)}")
 st.sidebar.markdown(f"🎯 **Total :** {len(hommes)+len(femmes)}")
 st.sidebar.markdown("---")
 
-mode = st.sidebar.radio("Mode du tournoi", ["Rounds libres", "Poules + Élimination"], index=0 if st.session_state.mode=="Rounds libres" else 1)
+mode = st.sidebar.radio(
+    "Mode du tournoi",
+    ["Rounds libres", "Poules + Élimination"],
+    index=0 if st.session_state.mode=="Rounds libres" else 1
+)
 st.session_state.mode = mode
 
 nb_terrains = st.sidebar.number_input("Nombre de terrains disponibles", 1, 10, 4)
 max_matchs = st.sidebar.number_input("Nombre maximum de matchs par joueur (Rounds libres)", 1, 20, 4)
 
 if st.sidebar.button("🔄 Reset Tournoi Complet", use_container_width=True):
-    # reset complet
     st.session_state.clear()
     init_state()
     st.rerun()
@@ -91,15 +95,15 @@ sync_joueurs()
 # =========================
 #   OUTILS COMMUNS
 # =========================
-def render_table_compact(df, col_joueur_w=220):
-    # Points: une décimale, colonne Joueur élargie
-    if "Points" in df.columns:
+def render_table_compact(df):
+    """Affiche en table compacte, 1 décimale pour Points si présent."""
+    if "Points" in df.columns and len(df) > 0:
         df = df.copy()
         df["Points"] = df["Points"].map(lambda x: f"{float(x):.1f}")
     st.table(df)
 
 def add_points(players, s_g, s_p, gagnants, perdants):
-    """Barème global : Gagnant 3 + 0.1*jeux, Perdant 0.5 + 0.1*jeux ; + matches & jeux."""
+    """Barème : Gagnant 3 + 0.1*jeux ; Perdant 0.5 + 0.1*jeux (et MAJ jeux / matchs)."""
     for p in gagnants:
         players[p]["Points"] += 3.0 + s_g * 0.1
         players[p]["Jeux"]   += s_g
@@ -140,7 +144,7 @@ def maj_classement_global():
             else:
                 add_points(st.session_state.joueurs, s2, s1, e2, e1)
 
-    # 2) Poules (matches round-robin)
+    # 2) Poules (round-robin)
     pools = st.session_state.poules.get("pools", [])
     teams = st.session_state.poules.get("teams", [])
     for p_idx, pool in enumerate(pools):
@@ -174,9 +178,16 @@ def maj_classement_global():
                     add_points(st.session_state.joueurs, s2, s1, B, A)
 
 def df_classement():
+    """DataFrame classement robuste même si 0 joueur."""
+    if not st.session_state.joueurs:
+        return pd.DataFrame(columns=["Joueur","Sexe","Points","Jeux","Matchs"])
     df = pd.DataFrame.from_dict(st.session_state.joueurs, orient="index").reset_index()
     df.rename(columns={"index":"Joueur"}, inplace=True)
-    df["Points"] = df["Points"].round(1)
+    if "Points" not in df.columns: df["Points"] = 0.0
+    if "Jeux"   not in df.columns: df["Jeux"]   = 0
+    if "Matchs" not in df.columns: df["Matchs"] = 0
+    if "Sexe"   not in df.columns: df["Sexe"]   = ""
+    df["Points"] = df["Points"].astype(float).round(1)
     df["Jeux"]   = df["Jeux"].astype(int)
     df["Matchs"] = df["Matchs"].astype(int)
     df = df.sort_values(by=["Points","Jeux"], ascending=False).reset_index(drop=True)
@@ -229,15 +240,25 @@ def section_rounds_libres():
     st.title("🎾 Tournoi de Padel – Rounds libres")
 
     counts = scheduled_counts_rounds()
-    H_elig = sum(1 for j in st.session_state.joueurs if st.session_state.joueurs[j]["Sexe"]=="H" and counts[j]<max_matchs)
-    F_elig = sum(1 for j in st.session_state.joueurs if st.session_state.joueurs[j]["Sexe"]=="F" and counts[j]<max_matchs)
+    H_elig = sum(1 for j in st.session_state.joueurs
+                 if st.session_state.joueurs[j]["Sexe"]=="H" and counts[j]<max_matchs)
+    F_elig = sum(1 for j in st.session_state.joueurs
+                 if st.session_state.joueurs[j]["Sexe"]=="F" and counts[j]<max_matchs)
     terrains_theo = min(nb_terrains, H_elig//2, F_elig//2)
 
     if st.session_state.joueurs:
         maj_classement_global()
         df_now = df_classement()
-        st.info(f"📊 Matchs joués : min={df_now['Matchs'].min() if not df_now.empty else 0}, max={df_now['Matchs'].max() if not df_now.empty else 0}, limite={max_matchs}")
+        if df_now.empty:
+            st.info(f"📊 Aucun joueur classé pour l’instant. Limite : {max_matchs} match(s).")
+        else:
+            st.info(
+                f"📊 Matchs joués : min={df_now['Matchs'].min()}, "
+                f"max={df_now['Matchs'].max()}, limite={max_matchs}"
+            )
         st.info(f"🗓️ Éligibles (planifiés < {max_matchs}) → Hommes: {H_elig} | Femmes: {F_elig}")
+    else:
+        st.info("Ajoute des joueurs dans la barre latérale pour commencer.")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -272,8 +293,11 @@ def section_rounds_libres():
     st.header("📈 Classement général")
     maj_classement_global()
     df = df_classement()
-    df.insert(0,"Rang", df.index+1)
-    render_table_compact(df)
+    if df.empty:
+        st.info("Aucun résultat à afficher pour l’instant.")
+    else:
+        df.insert(0,"Rang", df.index+1)
+        render_table_compact(df)
 
 # =========================
 #   POULES + ÉLIMINATION
@@ -290,11 +314,10 @@ def make_pairs_for_pools(nb_pairs):
     return teams
 
 def round_robin_indices(n):
-    """Retourne la liste de matches (paires d'indices) pour un round-robin simple n équipes."""
+    """Retourne la liste à plat des matches (paires d'indices) pour un round-robin de n équipes."""
     idxs = list(range(n))
-    # Round-robin "circle method"
     if n % 2 == 1:
-        idxs.append(None)  # bye
+        idxs.append(None)
         n += 1
     half = n // 2
     schedule = []
@@ -306,10 +329,8 @@ def round_robin_indices(n):
             b = rows[n - 1 - i]
             if a is not None and b is not None:
                 pairings.append((a, b))
-        # rotate
-        rows = [rows[0]] + [rows[-1]] + rows[1:-1]
+        rows = [rows[0]] + [rows[-1]] + rows[1:-1]  # rotation
         schedule.extend(pairings)
-    # schedule = liste à plat des matches ; ça nous va
     return schedule
 
 def build_pools():
@@ -320,21 +341,17 @@ def build_pools():
     if len(teams) < total_needed:
         st.error(f"Pas assez de joueurs pour {nb_p} poule(s) de {tpp} équipes (il faut {total_needed} paires H+F).")
         return False
-
-    st.session_state.poules["teams"] = teams
-    # Répartition
+    st.session_state.poules["teams"]  = teams
     pools = []
     all_ids = list(range(total_needed))
     for p in range(nb_p):
         pool_ids = all_ids[p*tpp:(p+1)*tpp]
-        # matches round robin sur indices locaux -> traduire en indices globaux
-        rr = round_robin_indices(tpp)  # paires (loc_i, loc_j)
+        rr = round_robin_indices(tpp)
         matches = []
         for (a,b) in rr:
-            matches.append( ( pool_ids[a], pool_ids[b] ) )
+            matches.append((pool_ids[a], pool_ids[b]))
         pools.append({"teams": pool_ids, "matches": matches})
     st.session_state.poules["pools"] = pools
-    # reset tableaux
     st.session_state.poules["main_bracket"] = []
     st.session_state.poules["cons_bracket"] = []
     return True
@@ -344,15 +361,13 @@ def render_pools():
     teams = st.session_state.poules["teams"]
     pools = st.session_state.poules["pools"]
 
-    main_candidates = []  # top2 de chaque poule
-    cons_candidates = []  # suivants 3‑4 de chaque poule (si existent)
+    main_candidates = []
+    cons_candidates = []
 
     for p_idx, pool in enumerate(pools):
         with st.expander(f"🏁 Poule {p_idx+1} – {len(pool['teams'])} équipes", expanded=True):
-            # Liste des équipes de la poule
             st.markdown("**Équipes :** " + ", ".join([f"{teams[i][0]}+{teams[i][1]}" for i in pool["teams"]]))
 
-            # Saisie des scores pour tous les matches
             for m_idx, (ti, tj) in enumerate(pool["matches"]):
                 e1, e2 = teams[ti], teams[tj]
                 c1,c2 = st.columns([3,1])
@@ -361,8 +376,7 @@ def render_pools():
                 with c2:
                     st.text_input("Score (ex: 6-4)", key=f"pool_{p_idx}_m_{m_idx}", label_visibility="collapsed")
 
-            # Classement de la poule
-            # calcul points internes poule
+            # Classement interne de poule (évolutif)
             scores = []
             for ti in pool["teams"]:
                 scores.append({"team": ti, "Pts": 0.0, "Jeux": 0})
@@ -375,8 +389,7 @@ def render_pools():
             for m_idx, (ti, tj) in enumerate(pool["matches"]):
                 raw = (st.session_state.get(f"pool_{p_idx}_m_{m_idx}") or "").strip()
                 sc = parse_score(raw)
-                if not sc: 
-                    continue
+                if not sc: continue
                 s1, s2 = sc
                 iA = idx_of(ti); iB = idx_of(tj)
                 if s1 > s2:
@@ -387,9 +400,7 @@ def render_pools():
                     scores[iA]["Pts"] += 0.5 + s1*0.1
                 scores[iA]["Jeux"] += s1; scores[iB]["Jeux"] += s2
 
-            # tri
             scores = sorted(scores, key=lambda x:(x["Pts"], x["Jeux"]), reverse=True)
-            # affichage
             dfp = pd.DataFrame([{
                 "Equipe": f"{teams[d['team']][0]}+{teams[d['team']][1]}",
                 "Points": round(d["Pts"],1),
@@ -399,17 +410,14 @@ def render_pools():
             st.caption("Classement de la poule (évolutif)")
             render_table_compact(dfp)
 
-            # candidats pour tableaux
             if len(scores) >= 2:
                 main_candidates += [teams[scores[0]["team"]], teams[scores[1]["team"]]]
             if len(scores) >= 4:
                 cons_candidates += [teams[scores[2]["team"]], teams[scores[3]["team"]]]
 
-    # Génération tableaux :
     c1,c2 = st.columns(2)
     with c1:
         if st.button("🎲 Générer tableaux (principal & consolante)"):
-            # principal
             if len(main_candidates) >= 4:
                 tmp = main_candidates[:]
                 random.shuffle(tmp)
@@ -420,7 +428,7 @@ def render_pools():
                 st.session_state.poules["main_bracket"] = [first_round]
             else:
                 st.warning("Pas assez d’équipes pour un tableau principal.")
-            # consolante
+
             if len(cons_candidates) >= 4:
                 tmpc = cons_candidates[:]
                 random.shuffle(tmpc)
@@ -443,7 +451,6 @@ def render_bracket(title, key_prefix, bracket):
         st.info("Aucun tour pour le moment.")
         return
 
-    # Affichage de TOUS les tours existants
     for r_idx, rnd in enumerate(bracket, start=1):
         with st.expander(f"Tour {r_idx} – {len(rnd)} match(s)", expanded=(r_idx==len(bracket))):
             for m_idx, (A,B) in enumerate(rnd):
@@ -453,7 +460,6 @@ def render_bracket(title, key_prefix, bracket):
                 with c2:
                     st.text_input("Score (ex: 6-4)", key=f"{key_prefix}_r{r_idx}_m{m_idx}", label_visibility="collapsed")
 
-            # Bouton pour VALIDER CE TOUR et générer le suivant (tirage aléatoire)
             if r_idx == len(bracket):
                 if st.button(f"✅ Valider le Tour {r_idx} ({title})"):
                     winners = []
@@ -482,9 +488,10 @@ def render_bracket(title, key_prefix, bracket):
 def section_poules():
     st.title("🎾 Tournoi de Padel – Poules + Élimination")
 
-    # Paramètres poules
-    nb_p = st.number_input("Nombre de poules", 1, 16, value=st.session_state.poules["params"]["nb_poules"], key="nb_poules")
-    tpp  = st.number_input("Équipes par poule (paires H+F)", 2, 12, value=st.session_state.poules["params"]["teams_per_pool"], key="teams_per_pool")
+    nb_p = st.number_input("Nombre de poules", 1, 16,
+                           value=st.session_state.poules["params"]["nb_poules"], key="nb_poules")
+    tpp  = st.number_input("Équipes par poule (paires H+F)", 2, 12,
+                           value=st.session_state.poules["params"]["teams_per_pool"], key="teams_per_pool")
     st.session_state.poules["params"]["nb_poules"] = int(nb_p)
     st.session_state.poules["params"]["teams_per_pool"] = int(tpp)
 
@@ -493,24 +500,23 @@ def section_poules():
             st.success("Poules générées.")
             st.rerun()
 
-    # Affichage poules + saisie scores
     if st.session_state.poules["pools"]:
         render_pools()
 
-    # Tableaux
     st.markdown("---")
     st.header("🏆 Tableaux à élimination directe")
-
     render_bracket("Tableau principal", "main_bracket", st.session_state.poules["main_bracket"])
     render_bracket("Tableau consolante", "cons_bracket", st.session_state.poules["cons_bracket"])
 
-    # Classement général (agrégé)
     st.markdown("---")
     st.header("📈 Classement général (agrégé)")
     maj_classement_global()
     df = df_classement()
-    df.insert(0,"Rang", df.index+1)
-    render_table_compact(df)
+    if df.empty:
+        st.info("Aucun résultat à afficher pour l’instant.")
+    else:
+        df.insert(0,"Rang", df.index+1)
+        render_table_compact(df)
 
 # =========================
 #   ROUTAGE
