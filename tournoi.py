@@ -24,8 +24,8 @@ div[data-testid="stTextInput"] input{padding:0.22rem 0.35rem !important;min-heig
 div[data-testid="stTable"] table{table-layout:fixed;width:100%;font-size:0.90rem !important;}
 div[data-testid="stTable"] th,div[data-testid="stTable"] td{padding:0.12rem 0.28rem !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 div[data-testid="stTable"] th:nth-child(1){width:56px;}
-div[data-testid="stTable"] th:nth-child(2){width:240px;}
-div[data-testid="stTable"] th:nth-child(3){width:44px;}
+div[data-testid="stTable"] th:nth-child(2){width:56px;}
+div[data-testid="stTable"] th:nth-child(3){width:140px;}
 div[data-testid="stTable"] th:nth-child(4){width:64px;}
 div[data-testid="stTable"] th:nth-child(5){width:56px;}
 div[data-testid="stTable"] th:nth-child(6){width:64px;}
@@ -535,4 +535,5 @@ else:
         st.markdown("---")
         render_bracket("Tableau principal", "main", st.session_state.main_bracket)
         render_bracket("Consolante", "cons", st.session_state.cons_bracket)
+
 
