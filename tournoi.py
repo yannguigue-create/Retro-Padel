@@ -113,14 +113,18 @@ def score_to_tuple(txt):
     except:
         return None
 
-def apply_points(stat, win_games, lose_games, win=True):
-    """Points: gagnants = 3 + 0.1*jeux ; perdants = 0.5"""
+def apply_points(stat, games_for, games_against, win):
+    """
+    Points:
+      - Gagnant : 3.0 + 0.1 * jeux marqués
+      - Perdant : 0.5 + 0.1 * jeux marqués   <-- (ajout demandé)
+    """
     if win:
-        stat["Points"] += 3.0 + 0.1*win_games
-        stat["Jeux"]   += win_games
+        stat["Points"] += 3.0 + 0.1*games_for
+        stat["Jeux"]   += games_for
     else:
-        stat["Points"] += 0.5
-        stat["Jeux"]   += lose_games
+        stat["Points"] += 0.5 + 0.1*games_for
+        stat["Jeux"]   += games_for
     stat["Matchs"] += 1
 
 def standings_df(stats, teams_idx, equipes_map):
@@ -138,7 +142,7 @@ def standings_df(stats, teams_idx, equipes_map):
     return df
 
 # ============================================================
-#  MODE 1 : ROUNDS LIBRES (reprend ton fonctionnement)
+#  MODE 1 : ROUNDS LIBRES
 # ============================================================
 def sync_joueurs_rounds():
     # synchro des listes texte avec dict joueurs
@@ -212,7 +216,7 @@ def maj_classement_rounds():
                 st.session_state.joueurs[p]["Jeux"]+=wg
                 st.session_state.joueurs[p]["Matchs"]+=1
             for p in losers:
-                st.session_state.joueurs[p]["Points"]+=0.5
+                st.session_state.joueurs[p]["Points"]+=0.5+0.1*lg   # <-- perdant : 0.5 + 0.1*jeux
                 st.session_state.joueurs[p]["Jeux"]+=lg
                 st.session_state.joueurs[p]["Matchs"]+=1
 
@@ -252,7 +256,6 @@ def round_robin(indices):
     """Génère un round-robin sur une liste d'indices d'équipes.
        Retourne : [ [ (i1,i2), (i3,i4), ... ], ... ] (une liste de rounds)."""
     teams = indices[:]
-    bye = None
     if len(teams)%2==1:
         teams.append(None)  # bye
     n = len(teams)
@@ -277,7 +280,7 @@ def build_bracket(teams, avoid_groups=None):
     t = teams[:]
     random.shuffle(t)
 
-    # Essaie de mélanger tant que des matches 1er tour ne sont pas de même poule (si avoid_groups)
+    # Essaie d’éviter 1er tour mêmes poules
     if avoid_groups:
         for _ in range(2000):
             ok=True
@@ -291,6 +294,8 @@ def build_bracket(teams, avoid_groups=None):
 
     # power-of-two padding
     n = len(t)
+    if n == 0:
+        return {"rounds": [], "current": 0}
     next_pow = 1<<(n-1).bit_length()
     for _ in range(next_pow-n):
         t.append(None)
@@ -323,9 +328,8 @@ def advance_bracket(bracket, score_prefix):
         s1,s2 = tup
         winners.append(A if s1>s2 else B)
 
-    # Si un seul vainqueur → fin
     if len(winners)==1:
-        bracket["rounds"].append([])  # garde trace d'une finale jouée
+        bracket["rounds"].append([])
         bracket["current"] += 1
         bracket["winner"] = winners[0]
         return True
@@ -381,7 +385,8 @@ if st.session_state.mode == "Rounds libres":
                     with c1: st.write(f"**Terrain {m+1}:** {e1[0]} (H) + {e1[1]} (F)  🆚  {e2[0]} (H) + {e2[1]} (F)")
                     with c2:
                         key = f"score_{r}_{m}"
-                        st.session_state.scores[key] = st.text_input("Score (ex: 6-4)", key=key, label_visibility="collapsed")
+                        init = st.session_state.get(key, "")
+                        st.text_input("Score (ex: 6-4)", key=key, value=init, label_visibility="collapsed")
 
         if st.button("📊 Calculer le classement"):
             maj_classement_rounds()
@@ -414,7 +419,6 @@ else:
             st.session_state.poules_matchs = [ round_robin(p) for p in poules ]
             st.session_state.poules_scores = {}
             st.session_state.poules_stats  = {}
-
             # reset tableaux
             st.session_state.main_bracket = {"rounds": [], "current": 0}
             st.session_state.cons_bracket = {"rounds": [], "current": 0}
@@ -438,11 +442,12 @@ else:
                             st.write(f"**{pair_name(equipes[a])}**  🆚  **{pair_name(equipes[b])}**")
                             key = f"pool_{pid}_R{ridx}_M{i}"
                             val = st.session_state.poules_scores.get(key,"")
-                            st.session_state.poules_scores[key] = st.text_input("Score", value=val, key=key, label_visibility="collapsed")
+                            # Ici on stocke dans notre dict poules_scores (pas dans session_state du widget)
+                            st.session_state.poules_scores[key] = st.text_input(
+                                "Score", value=val, key=key, label_visibility="collapsed"
+                            )
 
-                # Classement poule
-                # Calcul à la volée depuis les scores saisis
-                # Reset stats poule
+                # Classement poule (calcul à la volée)
                 for idx in poules[pid]:
                     stats.setdefault(tuple(equipes[idx]), {"Points":0.0,"Jeux":0,"Matchs":0})
                     s = stats[tuple(equipes[idx])]
@@ -457,10 +462,10 @@ else:
                         A,B = tuple(equipes[a]), tuple(equipes[b])
                         if s1>s2:
                             apply_points(stats[A], s1, s2, True)
-                            apply_points(stats[B], s1, s2, False)
+                            apply_points(stats[B], s2, s1, False)  # perdant 0.5 + 0.1*s2
                         else:
                             apply_points(stats[B], s2, s1, True)
-                            apply_points(stats[A], s2, s1, False)
+                            apply_points(stats[A], s1, s2, False)
 
                 df = standings_df(stats, poules[pid], equipes)
                 st.table(df)
@@ -476,14 +481,7 @@ else:
             cons_teams = []
             grp_of = {}  # équipe -> id poule
             for pid, lst in enumerate(poules):
-                # classe les équipes de la poule
-                df = standings_df(stats, lst, equipes)
-                order = []
-                for _,r in df.iterrows():
-                    # retrouver l'équipe (tuple) depuis le nom texte
-                    # plus simple : recalc tri localement pour robustesse
-                    pass
-                # on retrie via stats directement
+                # ordre via stats (Points,Jeux)
                 sub = []
                 for idx in lst:
                     s = stats[tuple(equipes[idx])]
@@ -502,7 +500,6 @@ else:
                     cons = ordered_idx[2:4]
                     cons_teams += [equipes[i] for i in cons]
 
-            # Construire les tableaux avec évitement 1er tour même poule
             st.session_state.main_bracket = build_bracket(main_teams, avoid_groups=grp_of)
             st.session_state.cons_bracket = build_bracket(cons_teams, avoid_groups=grp_of) if len(cons_teams)>=2 else {"rounds": [], "current":0}
             st.success("✅ Tableaux générés. Renseigne les scores de chaque tour puis valide pour avancer.")
@@ -523,8 +520,9 @@ else:
                     with cols[midx if midx<len(cols) else -1]:
                         st.write(f"{pair_name(A)}  🆚  {pair_name(B)}")
                         key = f"{key_prefix}_R{ridx+1}_M{midx}"
-                        st.session_state.setdefault(key,"")
-                        st.session_state[key] = st.text_input("Score", value=st.session_state[key], key=key, label_visibility="collapsed")
+                        init = st.session_state.get(key, "")
+                        # ⚠️ IMPORTANT : ne pas réassigner st.session_state[key] ici !
+                        st.text_input("Score", key=key, value=init, label_visibility="collapsed")
 
             # Bouton avancer
             if st.button(f"✅ Valider le Tour {cur+1} ({title})"):
@@ -537,4 +535,3 @@ else:
         st.markdown("---")
         render_bracket("Tableau principal", "main", st.session_state.main_bracket)
         render_bracket("Consolante", "cons", st.session_state.cons_bracket)
-
